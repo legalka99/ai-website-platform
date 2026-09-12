@@ -21,6 +21,7 @@ export class DefaultOrchestrator implements Orchestrator {
     for (const step of this.steps) {
       const context: AgentContext = {
         projectId: task.projectId,
+        goal: task.goal,
         input,
       };
 

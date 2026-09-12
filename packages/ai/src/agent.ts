@@ -7,7 +7,9 @@ export type AgentType =
 
 export interface AgentContext {
   projectId: string;
+  goal: string;
   input: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AgentResult {
