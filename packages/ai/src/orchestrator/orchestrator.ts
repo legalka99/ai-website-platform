@@ -5,9 +5,13 @@ import type {
   OrchestratorResult,
   OrchestratorTask,
 } from './types.js';
+import type { ResultValidator } from './validation.js';
 
 export class DefaultOrchestrator implements Orchestrator {
-  constructor(private readonly steps: AgentStep[] = []) {}
+  constructor(
+    private readonly steps: AgentStep[] = [],
+    private readonly validator?: ResultValidator,
+  ) {}
 
   async run(task: OrchestratorTask): Promise<OrchestratorResult> {
     const results: AgentResult[] = [];
@@ -31,6 +35,23 @@ export class DefaultOrchestrator implements Orchestrator {
           steps: results,
           error: result.error ?? `Agent ${step.agent.type} failed`,
         };
+      }
+
+      if (this.validator) {
+        const validation = await this.validator.validate(result.output);
+
+        if (!validation.valid) {
+          const issues = validation.issues
+            .map((issue) => `${issue.code}: ${issue.message}`)
+            .join('; ');
+
+          return {
+            success: false,
+            output: result.output,
+            steps: results,
+            error: `Validation failed: ${issues}`,
+          };
+        }
       }
 
       input = result.output;
