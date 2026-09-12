@@ -3,3 +3,5 @@ export * from './agent.js';
 export * from './orchestrator/index.js';
 
 export * from './contracts/index.js';
+
+export * from './agents/index.js';
