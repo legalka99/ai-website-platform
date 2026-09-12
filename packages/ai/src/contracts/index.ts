@@ -9,3 +9,5 @@ export * from './developer-output.js';
 export * from './qa-report.js';
 
 export * from './content-agent-input.js';
+
+export * from './developer-agent-input.js';
