@@ -33,17 +33,9 @@ async function runTest() {
     [
       {
         agent: validAgent,
-        context: {
-          projectId: 'test-project',
-          input: {},
-        },
       },
       {
         agent: invalidAgent,
-        context: {
-          projectId: 'test-project',
-          input: {},
-        },
       },
     ],
     new DefaultResultValidator(),

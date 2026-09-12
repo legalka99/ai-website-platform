@@ -1,4 +1,4 @@
-import type { AIAgent, AgentContext, AgentResult } from '../agent.js';
+import type { AIAgent, AgentResult } from '../agent.js';
 
 export interface OrchestratorTask {
   projectId: string;
@@ -8,7 +8,6 @@ export interface OrchestratorTask {
 
 export interface AgentStep {
   agent: AIAgent;
-  context: AgentContext;
 }
 
 export interface OrchestratorResult {
