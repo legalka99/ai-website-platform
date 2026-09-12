@@ -5,3 +5,5 @@ export * from './design-direction.js';
 export * from './content-plan.js';
 
 export * from './developer-output.js';
+
+export * from './qa-report.js';
