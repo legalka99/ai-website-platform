@@ -5,20 +5,27 @@ export type AgentType =
   | 'developer'
   | 'qa';
 
-export interface AgentContext {
+export interface AgentContext<
+  TInput extends Record<string, unknown> = Record<string, unknown>,
+> {
   projectId: string;
   goal: string;
-  input: Record<string, unknown>;
+  input: TInput;
   metadata?: Record<string, unknown>;
 }
 
-export interface AgentResult {
+export interface AgentResult<
+  TOutput extends Record<string, unknown> = Record<string, unknown>,
+> {
   success: boolean;
-  output: Record<string, unknown>;
+  output: TOutput;
   error?: string;
 }
 
-export interface AIAgent {
+export interface AIAgent<
+  TInput extends Record<string, unknown> = Record<string, unknown>,
+  TOutput extends Record<string, unknown> = Record<string, unknown>,
+> {
   type: AgentType;
-  run(context: AgentContext): Promise<AgentResult>;
+  run(context: AgentContext<TInput>): Promise<AgentResult<TOutput>>;
 }
