@@ -1,8 +1,8 @@
 {
-  "name": "ai-website-platform",
+  "name": "kleo",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-платформа для создания, редактирования и продвижения сайтов.",
+  "description": "Kleo — платформа ИИ-агентов для создания и развития сайтов.",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -11,8 +11,9 @@
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "test": "tsc --noEmit false --outDir .test-build && node --test tests/*.test.mjs .test-build/packages/ai/src/orchestrator/tests/*.test.js",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "^7.0.2"
