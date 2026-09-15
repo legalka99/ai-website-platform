@@ -101,6 +101,7 @@ for (const [label, mutate, code] of [
   ['empty output', value => { value.output = []; }, 'INVALID_RESPONSE'],
   ['refusal', value => { value.output[0].content = [{ type: 'refusal', refusal: testKey }]; }, 'REFUSAL'],
   ['truncation', value => { value.status = 'incomplete'; }, 'INCOMPLETE'],
+  ['escaped credential echo', value => { value.output[0].content[0].text = JSON.stringify({ ...businessWire(), notes: testKey }).replace(testKey, testKey.split('').map(c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')).join('')); }, 'INVALID_RESPONSE'],
   ['upstream credential echo', value => { value.output[0].content[0].text = JSON.stringify({ ...businessWire(), notes: testKey }); }, 'INVALID_RESPONSE'],
 ]) test(`rejects ${label} and preserves token accounting`, async () => {
   const value = body(); mutate(value);

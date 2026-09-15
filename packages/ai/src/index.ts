@@ -12,3 +12,11 @@ export * from './agents/index.js';
 
 export * from './services/guarded-provider.js';
 export * from './services/business-service.js';
+
+export * from './providers/yandex-config.js';
+export * from './providers/yandex-provider.js';
+export * from './router/types.js';
+export * from './router/policy.js';
+export * from './router/health.js';
+export * from './router/ai-router.js';
+export * from './services/routed-business-service.js';

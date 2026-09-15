@@ -105,7 +105,7 @@ export class OpenAIProvider implements AIProvider {
       if (parts[0].includes(this.#config.apiKey)) throw new AIProviderError('INVALID_RESPONSE', usage);
       let structured: unknown;
       try { structured = JSON.parse(parts[0]); } catch { throw new AIProviderError('INVALID_RESPONSE', usage); }
-      if (!validate(structured)) throw new AIProviderError('INVALID_RESPONSE', usage);
+      if (JSON.stringify(structured).includes(this.#config.apiKey) || !validate(structured)) throw new AIProviderError('INVALID_RESPONSE', usage);
       return { content: parts[0], structured, model: usage.model, usageRecord: usage,
         usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens } };
     } catch (error) {
@@ -116,7 +116,7 @@ export class OpenAIProvider implements AIProvider {
       if (error instanceof OpenAI.APIError && error.status === 429) throw new AIProviderError('RATE_LIMIT', usage);
       if (error instanceof OpenAI.APIConnectionError && error.cause instanceof AIProviderError) throw new AIProviderError(error.cause.code, usage);
       if (error instanceof OpenAI.APIConnectionError) throw new AIProviderError('NETWORK', usage);
-      if (error instanceof OpenAI.APIError) throw new AIProviderError('API_ERROR', usage);
+      if (error instanceof OpenAI.APIError) throw new AIProviderError('API_ERROR', usage, {transient: error.status !== undefined && error.status >= 500 && error.status <= 599});
       throw new AIProviderError('INVALID_RESPONSE', usage);
     } finally {
       clearTimeout(timer);

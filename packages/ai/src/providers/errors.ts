@@ -1,6 +1,9 @@
 import type { AIUsageRecord } from '../provider.js';
 
 const messages = {
+  YANDEX_MISSING_API_KEY: 'Добавьте YANDEX_API_KEY локально в .env.',
+  YANDEX_MISSING_FOLDER: 'Укажите KLEO_YANDEX_FOLDER_ID в локальной конфигурации.',
+  ROUTE_UNAVAILABLE: 'Нет доступного провайдера с необходимыми возможностями.',
   MISSING_API_KEY: 'Добавьте OPENAI_API_KEY локально в .env.',
   INVALID_CONFIG: 'Проверьте модель и числовые ограничения в .env.',
   INVALID_REQUEST: 'Некорректный или слишком большой запрос к ИИ.',
@@ -18,7 +21,7 @@ export type AIErrorCode = keyof typeof messages;
 
 /** Never retain upstream bodies, headers, exceptions or secrets in public errors. */
 export class AIProviderError extends Error {
-  constructor(public readonly code: AIErrorCode, public readonly usage?: AIUsageRecord) {
+  constructor(public readonly code: AIErrorCode, public readonly usage?: AIUsageRecord, public readonly diagnostic?: {transient?: boolean}) {
     super(messages[code]);
     this.name = 'AIProviderError';
   }

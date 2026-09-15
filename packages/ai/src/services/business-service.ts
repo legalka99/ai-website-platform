@@ -1,20 +1,13 @@
-import { DefaultBusinessAgent } from '../agents/default-business-agent.js';
-import { OpenAIProvider } from '../providers/openai-provider.js';
+import type { DefaultBusinessAgent } from '../agents/default-business-agent.js';
 import type { OpenAIProviderConfig } from '../providers/config.js';
-import { AIProviderError } from '../providers/errors.js';
-import { GuardedAIProvider, type AIServiceContext } from './guarded-provider.js';
+import type { AIServiceContext } from './guarded-provider.js';
 import type { SecretProvider, IntegrationCredentialRef } from '../../../security/src/secrets.js';
 import type { AuthorizationPolicy } from '../../../security/src/authorization.js';
 import type { AICostGuard } from '../../../security/src/rate-limit.js';
-import { SecurityError } from '../../../security/src/errors.js';
-/** Trusted server wiring only; never called with actor/credential references supplied by the model. */
+import { createRoutedBusinessService } from './routed-business-service.js';
+/** Backward-compatible OpenAI-only server entry. The agent receives no concrete model. */
 export async function createBusinessService(options: { context: AIServiceContext; authorization: AuthorizationPolicy; costs: AICostGuard;
   credentials: IntegrationCredentialRef; secrets: SecretProvider; config: Omit<OpenAIProviderConfig, 'apiKey'>; transport?: typeof fetch }): Promise<DefaultBusinessAgent> {
-  const { context, credentials, authorization, secrets, config, costs } = options;
-  if (!authorization.authorize(context.actor, 'generate', context) || credentials.provider !== 'openai' ||
-    credentials.projectId !== context.projectId || credentials.organizationId !== context.organizationId) throw new SecurityError('ACCESS_DENIED');
-  let key: string;
-  try { key = await secrets.resolve(credentials); } catch { throw new AIProviderError('AUTH'); }
-  const provider = new OpenAIProvider({ ...config, apiKey: key }, options.transport);
-  return new DefaultBusinessAgent(new GuardedAIProvider(provider, context, authorization, costs, config.maxOutputTokens), config.model);
+  return createRoutedBusinessService({...options,providers:[{id:'openai',config:options.config,credentials:options.credentials,transport:options.transport}],
+    policy:{id:'openai-business',version:'1',maxAttempts:1,tasks:{business:{preferred:'openai',required:['structuredOutput']}}}});
 }

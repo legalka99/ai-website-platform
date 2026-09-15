@@ -11,7 +11,7 @@ const rules = [
   ['github-token', /\bgh[pousr]_[A-Za-z0-9]{25,}/],
   ['aws-key', /\bAKIA[A-Z0-9]{16}/],
   ['private-key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\r\n]+[A-Za-z0-9+/=\r\n]{40,}/],
-  ['bearer-token', /\bBearer\s+(?!TEST_ONLY)[A-Za-z0-9._-]{24,}/],
+  ['auth-token', /\b(?:Bearer|Api-Key)\s+(?!TEST_ONLY)[A-Za-z0-9._-]{24,}/],
   ['secret-assignment', /(?:api[_-]?key|secret|password|access[_-]?token)\s*[=:]\s*["']?(?!TEST_ONLY|process\.|config\.|undefined|null|\[)[A-Za-z0-9_+/=-]{24,}/i],
 ];
 const findings = []; let scanned = 0;

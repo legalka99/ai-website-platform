@@ -19,10 +19,14 @@
 - [x] Локальные secret scan (включая archives), static security check, dependency audit scripts.
 - [x] Threat model, private reporting и incident/backup rules.
 
+- [x] Yandex/Router: все adapters за guard; каждая fallback attempt расходует общий workflow budget; auth/scope/validation/cancellation/budget errors не переключают provider.
+- [x] Yandex fixed HTTPS, Api-Key redaction, request/body/schema limits, Unicode-escaped credential echo checks, safe request-id и normalized usage.
+- [x] Ручной smoke: выбор provider/router, paid opt-in; дополнительный allow-fallback для максимум двух вызовов.
+
 ## Planned before local MVP
 
 - [ ] Подключить guards ко всем новым серверным путям и реальному хранилищу; протестировать обход через альтернативный маршрут.
-- [ ] Явно утверждённый live Business smoke и проверка качества профиля; на этом этапе не запускался.
+- [ ] Новый YandexProvider/Router live smoke и проверка качества профиля. Владелец сообщил о прежнем OpenAI smoke и отдельном ручном Yandex вызове; новый путь ещё не проверен live.
 - [ ] Подключать Design только через серверную фабрику/общий cost guard и структурированную валидацию.
 - [ ] Безопасное сохранение проектов/версий с projectId, отмена задач и наблюдаемый лимит расходов.
 - [ ] Изоляция preview origin, безопасный renderer, sanitization и проверка XSS.

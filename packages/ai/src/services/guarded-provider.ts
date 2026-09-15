@@ -21,7 +21,8 @@ export class GuardedAIProvider implements AIProvider {
       return { ...response, budget: reservation.budget,
         usageRecord: response.usageRecord ? { ...response.usageRecord, projectId: this.#context.projectId, workflowId: this.#context.workflowId } : undefined };
     } catch (error) {
-      if (error instanceof AIProviderError || error instanceof SecurityError) throw error;
+      if (error instanceof AIProviderError) throw new AIProviderError(error.code, error.usage ? {...error.usage, projectId:this.#context.projectId, workflowId:this.#context.workflowId} : undefined, error.diagnostic);
+      if (error instanceof SecurityError) throw error;
       throw new AIProviderError('API_ERROR');
     } finally { reservation.release(); }
   }

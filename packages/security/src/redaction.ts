@@ -5,7 +5,7 @@ const patterns = [
   /\bauthorization["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\r\n,;}]+)/gi,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
   /\bsk-[a-zA-Z0-9_-]{12,}/g,
-  /\bBearer\s+[^\s"',;}]+/gi,
+  /\b(?:Bearer|Api-Key)\s+[^\s"',;}]+/gi,
   /((?:password|passwd|secret|token|api[_-]?key|authorization)["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&}]+)/gi,
 ];
 export function redactText(value: string, knownSecrets: readonly string[] = []): string {

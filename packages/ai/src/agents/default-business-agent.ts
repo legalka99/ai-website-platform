@@ -1,3 +1,4 @@
+import { AIRoutingError, AIRoutingSecurityError } from '../router/ai-router.js';
 import { UNTRUSTED_DATA_POLICY, untrustedDataMessage } from '../../../security/src/prompt-policy.js';
 import { containsSecret } from '../../../security/src/redaction.js';
 import { validateExternal } from '../../../security/src/validation.js';
@@ -21,7 +22,7 @@ const wireValidator = new Ajv({ strict: true }).compile(businessProfileSchema);
 
 export class DefaultBusinessAgent implements BusinessAgent {
   readonly type = 'business' as const;
-  constructor(private readonly provider: AIProvider, private readonly model: string) {}
+  constructor(private readonly provider: AIProvider, private readonly model: string = 'route') {}
 
   async run(context: AgentContext): Promise<AgentResult<BusinessProfile>> {
     let execution: NonNullable<AgentResult<BusinessProfile>['execution']> | undefined;
@@ -54,6 +55,7 @@ export class DefaultBusinessAgent implements BusinessAgent {
         context: { projectId: context.projectId, goal: context.goal },
       });
       execution.usage = response.usageRecord;
+      if (response.routing) execution.routing = response.routing;
       if (response.budget) execution.budget = response.budget;
       let wire: unknown = response.structured;
       if (wire === undefined) {
@@ -68,8 +70,10 @@ export class DefaultBusinessAgent implements BusinessAgent {
         missingFields: validation.issues.map(issue => issue.field ?? 'business'), execution };
       return { success: true, output: output as BusinessProfile, execution };
     } catch (error) {
+      if (execution && error instanceof AIRoutingSecurityError) execution.routing = error.routing;
       if (error instanceof SecurityError) return { success: false, errorCode: error.code, error: 'Запрос отклонён политикой безопасности или лимитами.', execution };
       if (error instanceof AIProviderError) {
+        if (execution && error instanceof AIRoutingError) execution.routing = error.routing;
         if (execution && error.usage) execution.usage = error.usage;
         return { success: false, errorCode: error.code, error: error.message, execution };
       }

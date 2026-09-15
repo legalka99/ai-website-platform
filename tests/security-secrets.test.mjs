@@ -13,7 +13,7 @@ const store = () => new LocalSecretProvider([{ ...ref, value: secret }], 'test')
 
 test('redacts OpenAI-like keys, bearer, private keys and string assignments', () => {
   const key = 'sk-' + 'a'.repeat(32);
-  for (const input of [key, `Bearer ${secret}`, `Authorization: Basic ${secret}`, `password=${secret}`, `token: ${secret}`, `{"password":"${secret}"}`, `-----BEGIN PRIVATE KEY-----\n${secret}\n-----END PRIVATE KEY-----`]) {
+  for (const input of [key, `Bearer ${secret}`, `Api-Key ${secret}`, `Authorization: Basic ${secret}`, `password=${secret}`, `token: ${secret}`, `{"password":"${secret}"}`, `-----BEGIN PRIVATE KEY-----\n${secret}\n-----END PRIVATE KEY-----`]) {
     assert.ok(containsSecret(input)); assert.ok(!redactText(input).includes(secret)); assert.ok(!redactText(input).includes(key));
   }
 });

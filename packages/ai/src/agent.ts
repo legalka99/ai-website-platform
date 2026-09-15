@@ -19,7 +19,7 @@ export type AgentResult<
 > = ({ success: true; output: TOutput; error?: never } | {
   success: false; output?: TOutput; error: string; errorCode?: string; missingFields?: string[];
 }) & {
-  execution?: { projectId: string; goal: string; usage?: import('./provider.js').AIUsageRecord; budget?: import('../../security/src/rate-limit.js').AIBudgetMetadata };
+  execution?: { routing?: import('./router/types.js').RoutingRecord; projectId: string; goal: string; usage?: import('./provider.js').AIUsageRecord; budget?: import('../../security/src/rate-limit.js').AIBudgetMetadata };
 };
 
 export interface AIAgent<

@@ -17,6 +17,7 @@ export interface AIRequest {
 }
 
 export interface AIUsageRecord {
+  requestId?: string;
   projectId?: string;
   workflowId?: string;
   provider: string;
@@ -29,6 +30,7 @@ export interface AIUsageRecord {
 }
 
 export interface AIResponse {
+  routing?: import('./router/types.js').RoutingRecord;
   budget?: import('../../security/src/rate-limit.js').AIBudgetMetadata;
   content: string;
   model: string;
