@@ -54,3 +54,13 @@ test('Yandex missing/invalid usage remains unknown and malicious request ID disc
 test('Yandex network failure while reading response remains a safe network error',async()=>{
  await assert.rejects(new YandexProvider(config,async()=>new Response(new ReadableStream({start(c){c.error(new Error(key));}}))).generate(req()),errorCode('NETWORK'));
 });
+
+test('Yandex network failure preserves timing with unknown tokens',async()=>{
+ await assert.rejects(new YandexProvider(config,async()=>{throw Error();}).generate(req()),error=>{
+  assert.equal(error.usage.provider,'yandex');assert.ok(error.usage.durationMs>=0);assert.equal(error.usage.totalTokens,undefined);return true;
+ });
+});
+test('Yandex invalid cached tokens remain unknown',async()=>{
+ const b=body();b.usage.prompt_tokens_details={cached_tokens:'7'};
+ assert.equal((await new YandexProvider(config,async()=>response(b)).generate(req())).usageRecord.cachedInputTokens,undefined);
+});

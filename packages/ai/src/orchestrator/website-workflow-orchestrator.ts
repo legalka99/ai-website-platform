@@ -8,11 +8,13 @@ export class WebsiteWorkflowOrchestrator {
 
   async run(task: WebsiteWorkflowTask): Promise<WebsiteWorkflowResult> {
     const state: WebsiteWorkflowState = {};
+    const executions: NonNullable<WebsiteWorkflowResult['executions']> = {};
     let stage = 'business';
     const execute = async <I extends object, O extends object>(expectedStage: AgentType, agent: AIAgent<I, O>, input: I): Promise<O> => {
       stage = expectedStage;
       if (agent.type !== expectedStage) throw new Error('Agent role does not match the workflow stage');
       const result = await agent.run({ projectId: task.projectId, goal: task.goal, input });
+      if (result?.execution) executions[expectedStage] = result.execution;
       if (!result || result.success !== true) throw new Error(result?.error || 'Agent failed');
       const validation = validateWebsiteAgentOutput(expectedStage, result.output, task.projectId);
       if (!validation.valid) {
@@ -29,10 +31,10 @@ export class WebsiteWorkflowOrchestrator {
         business: state.business, design: state.design, content: state.content,
       });
       state.qa = await execute('qa', this.agents.qa, state.developer);
-      if (!state.qa.passed) return { success: false, state, error: 'qa: Website did not pass quality checks' };
-      return { success: true, state };
+      if (!state.qa.passed) return { success: false, state, executions, error: 'qa: Website did not pass quality checks' };
+      return { success: true, state, executions };
     } catch (error) {
-      return { success: false, state, error: `${stage}: ${error instanceof Error ? error.message : String(error)}` };
+      return { success: false, state, executions, error: `${stage}: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 }

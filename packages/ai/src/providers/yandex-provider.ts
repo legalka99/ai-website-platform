@@ -31,7 +31,8 @@ export class YandexProvider implements AIProvider {
     } catch { throw new AIProviderError('INVALID_REQUEST'); }
     if (request.signal?.aborted) throw new AIProviderError('CANCELLED');
     const started = Date.now(), controller = new AbortController();
-    let timedOut = false, usage: AIUsageRecord | undefined;
+    let timedOut = false;
+    let usage: AIUsageRecord = {provider:'yandex',model:config.model,timestamp:new Date(started).toISOString(),durationMs:0};
     let rejectAbort: (error: AIProviderError) => void = () => {};
     const aborted = new Promise<never>((_, reject) => { rejectAbort = reject; });
     const cancel = () => { controller.abort(); rejectAbort(new AIProviderError('CANCELLED')); };
@@ -41,10 +42,10 @@ export class YandexProvider implements AIProvider {
       let response: Response;
       try { response = await this.#fetch(ENDPOINT, {method:'POST',redirect:'error',signal:controller.signal,
         headers:{'Content-Type':'application/json','Authorization':`Api-Key ${config.apiKey}`,'OpenAI-Project':config.folderId,'x-data-logging-enabled':'false'},body}); }
-      catch { throw new AIProviderError('NETWORK'); }
+      catch { throw new AIProviderError('NETWORK',usage); }
       const rawId = response.headers.get('x-request-id');
       const requestId = rawId && /^[a-zA-Z0-9_-]{1,128}$/.test(rawId) && !containsSecret(rawId,[config.apiKey]) ? rawId : undefined;
-      usage = {provider:'yandex',model:config.model,timestamp:new Date().toISOString(),durationMs:Date.now()-started,...(requestId ? {requestId} : {})};
+      usage = {provider:'yandex',model:config.model,timestamp:new Date(started).toISOString(),durationMs:Date.now()-started,...(requestId ? {requestId} : {})};
       if (!response.ok) {
         void response.body?.cancel().catch(() => {});
         const code = response.status === 401 || response.status === 403 ? 'AUTH' : response.status === 429 ? 'RATE_LIMIT' : 'API_ERROR';
@@ -65,6 +66,7 @@ export class YandexProvider implements AIProvider {
       const count=(n:unknown) => typeof n==='number' && Number.isSafeInteger(n) && n>=0 ? n : undefined;
       usage.durationMs=Date.now()-started;
       usage.inputTokens=count(data.usage?.prompt_tokens); usage.outputTokens=count(data.usage?.completion_tokens); usage.totalTokens=count(data.usage?.total_tokens);
+      usage.cachedInputTokens=count(data.usage?.prompt_tokens_details?.cached_tokens);
       // Only accept a reported model belonging to this folder; never return arbitrary upstream strings.
       if (typeof data.model==='string' && data.model===config.model) usage.model=data.model;
       if (!Array.isArray(data.choices) || data.choices.length!==1) throw new AIProviderError('INVALID_RESPONSE',usage);
@@ -79,6 +81,7 @@ export class YandexProvider implements AIProvider {
     };
     try { return await Promise.race([operation(),aborted]); }
     catch(error) {
+      usage.durationMs=Date.now()-started;
       if(timedOut) throw new AIProviderError('TIMEOUT',usage);
       if(request.signal?.aborted) throw new AIProviderError('CANCELLED',usage);
       if(error instanceof AIProviderError) throw error;

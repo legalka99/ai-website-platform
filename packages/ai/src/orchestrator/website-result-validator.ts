@@ -1,3 +1,4 @@
+import { validateDesignDirection } from '../validation/design-direction-validator.js';
 import type { AgentType } from '../agent.js';
 import type { ValidationIssue, ValidationResult } from './validation.js';
 
@@ -65,11 +66,7 @@ const rules: Record<AgentType, Rule> = {
     geography: optional(array(text)), advantages: optional(array(text)), websiteGoals: array(text, 1),
     desiredActions: array(text, 1), competitors: optional(array(text)), notes: optional(text),
   }),
-  design: object({
-    styleName: text, description: text, mood: array(text, 1), colors,
-    typography: object({ headingStyle: text, bodyStyle: text }), layoutPrinciples: array(text, 1),
-    visualReferences: optional(array(text)), notes: optional(text),
-  }),
+  design: (value, _path, issues) => { issues.push(...validateDesignDirection(value).issues); },
   content: object({
     pageTitle: text, pageGoal: text, toneOfVoice: text, keyMessages: array(text, 1),
     sections: array(object({ type: text, purpose: text, heading: optional(text), text: optional(text), points: optional(array(text)), callToAction: optional(text) }), 1),

@@ -1,6 +1,6 @@
 # Kleo AI Router и YandexProvider
 
-Статус: Implemented в коде и offline tests. На этом этапе реальные платные запросы не выполнялись. Владелец сообщил об успешном прежнем OpenAI Business smoke и отдельном Yandex запросе из Terminal; это не проверка нового Yandex адаптера, JSON Schema или Router end-to-end.
+Статус: Implemented; в актуальном задании владелец подтвердил реальную проверку OpenAI/Yandex adapters и обоих Router routes. Ниже исторические сведения об этапе первоначальной реализации. На этом этапе реальные платные запросы не выполнялись. Владелец сообщил об успешном прежнем OpenAI Business smoke и отдельном Yandex запросе из Terminal; это не проверка нового Yandex адаптера, JSON Schema или Router end-to-end.
 
 ## Границы
 
@@ -16,7 +16,7 @@ Agent → Business/Application Service → AIRouter → GuardedAIProvider → Op
 
 Нормализованные ID: `openai`, `yandex`. Расширение списка и регистрация адаптера потребуются для будущих DeepSeek/self-hosted; сейчас неизвестные ID отклоняются.
 
-RouterPolicy имеет id/version, maxAttempts (1 или 2), таблицу задач business/design/content/developer/qa с preferred, optional fallback и required capabilities. `readRouterPolicy` берёт общий preferred/fallback из config; сервер может задавать отдельную политику каждой задачи. Реальных новых агентов, кроме Business, нет.
+RouterPolicy имеет id/version, maxAttempts (1 или 2), таблицу задач business/design/content/developer/qa с preferred, optional fallback и required capabilities. `readRouterPolicy` берёт общий preferred/fallback из config; сервер может задавать отдельную политику каждой задачи. Business и Design реализованы через общий guarded service.
 
 Выбор детерминирован при одинаковой policy, задаче, лимите токенов и runtime health. По порядку preferred → configured fallback исключаются недоступные варианты, отсутствующие capabilities и недостаточный maxOutputTokens. Если ничего не подходит — ROUTE_UNAVAILABLE. Decision содержит provider, model, reason, fallbackProviders, policyId/version. Capability mismatch может сразу выбрать альтернативу, без попытки у неподходящего провайдера.
 
@@ -91,3 +91,9 @@ npm run smoke:business -- --provider=router --confirm-paid-request --allow-fallb
 Implemented: OpenAI/Yandex adapters, deterministic Router, guarded controlled fallback, normalized usage, local health и ручной smoke. Planned: ProviderEvaluation benchmark runner/quality scores, другие провайдеры, self-hosted, динамическая маршрутизация и production shared state. ProviderEvaluation сейчас только тип; score не присваивается автоматически.
 
 Следующий шаг — отдельный явный запуск нового Yandex Business smoke на учебных данных. Затем Design Agent можно реализовывать через тот же service/router/guard и validation boundary. Это не свидетельство production-готовности всего Kleo.
+
+## Актуализация Real Design
+
+createGuardedRouter используется Business и Design services; WebsiteWorkflow вызывает Design после проверенного Business. Ручной smoke:design поддерживает openai/yandex, strict opt-in, одну попытку и независимые безопасные projections. Реальные Design smoke пока не запускались. Routing selection/fallback не менялись; snapshotUsage дополнен только нейтральной telemetry.
+
+Guard добавляет доверенные actorId/organizationId/agentType; usage сохраняет cachedInputTokens при наличии. Порядок attempts отражает fallback, расходы не суммируются с дублирующим top-level usage. WebsiteWorkflowResult.executions сохраняет доступную telemetry этапов. Персистентного учёта нет. [Client Token Quotas, Cost Accounting, Admin Console и margin analytics — PLANNED](USAGE-COST-ADMIN-PLAN.md).

@@ -22,9 +22,9 @@
 - DefaultBusinessAgent: разрешённые входные поля → структурированный ответ → существующий runtime validator.
 - Security Foundation: общие политики доступа, секретов, URL, webhook, инструментов, файлов и лимитов; серверная граница Business Agent.
 - OpenAI и YandexProvider за единым Router с контролируемым fallback и общей защитой бюджета.
-- 222 автоматических теста; проверка TypeScript.
+- 294 автоматических теста; проверка TypeScript.
 
-Это ядро разработки. По сообщению владельца, прежний OpenAI Business smoke и отдельный Yandex запрос из Terminal прошли. Новый YandexProvider/Router проверен offline; его реальный smoke ещё требуется. Остальные четыре агента не подключены к API. База данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Workflow возвращает состояние в памяти; долговременное сохранение ещё предстоит реализовать. Проверка схемы данных не заменяет проверку фактов, дизайна и работы сайта.
+Это ядро разработки. По сообщению владельца, прежний OpenAI Business smoke и отдельный Yandex запрос из Terminal прошли. В актуальном задании владелец подтвердил реальные OpenAI/Yandex routes. Business и Design подключены к Router; реальный Design smoke ещё требуется. Content/Developer/QA не подключены к API. База данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Workflow возвращает состояние в памяти; долговременное сохранение ещё предстоит реализовать. Проверка схемы данных не заменяет проверку фактов, дизайна и работы сайта.
 
 ## Проверка проекта
 
@@ -71,7 +71,7 @@ npm run smoke:business -- --confirm-paid-request
 
 В результате возвращаются provider, model, доступные input/output/total tokens, timestamp и durationMs. Неизвестный расход не подменяется нулём. Стоимость не вычисляется, долговременного биллинга нет; при обрыве связи или таймауте расход может быть неизвестен, даже если запрос обрабатывался сервером.
 
-Реализовано в коде и проверено без сети: протокол запроса, схемы, ошибки, отмена, лимиты и защита ручного запуска. **Не проверены в этом этапе реальным API:** новый Yandex structured adapter, Router/fallback, качество фактов и производственная эксплуатация. О прежних успешных OpenAI и ручном Yandex вызовах сообщил владелец.
+Реализовано в коде и проверено без сети: протокол запроса, схемы, ошибки, отмена, лимиты и защита ручного запуска. **Не проверены в этом этапе реальным API:** Design, качество фактов и производственная эксплуатация. Предыдущие adapters и оба Router route подтверждены владельцем. О прежних успешных OpenAI и ручном Yandex вызовах сообщил владелец.
 
 Основа реализации: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) и [официальный SDK OpenAI для JavaScript/TypeScript](https://github.com/openai/openai-node).
 
@@ -106,6 +106,25 @@ npm run smoke:business -- --provider=yandex --confirm-paid-request
 
 Существующая команда без `--provider` по-прежнему использует только OpenAI. Для выбора по router config укажите `--provider=router`. Резервная попытка в smoke требует также `--allow-fallback`; без него максимум один вызов. В обычной серверной RouterPolicy максимум две попытки, fallback выключен при пустой настройке. Каждая попытка расходует общий request/output budget, неизвестный фактический usage не выдумывается.
 
-Fallback допускается после timeout/network/rate limit/явного HTTP 5xx. Ошибки доступа, scope, schema/контракта, cancellation и budget/security denial переключение запрещают. Новые paid calls этим этапом не выполнялись. Политики всех пяти типов задач подготовлены; новые агенты не реализованы.
+Fallback допускается после timeout/network/rate limit/явного HTTP 5xx. Ошибки доступа, scope, schema/контракта, cancellation и budget/security denial переключение запрещают. Новые paid calls этим этапом не выполнялись. Политики всех пяти типов задач подготовлены; реализованы Business и Design, остальные агенты ещё впереди.
 
 [Архитектура, capabilities, ошибки, health, usage и команды](docs/AI-ROUTER.md). Benchmarks, другие провайдеры, self-hosted и динамическая маршрутизация остаются Planned.
+
+## Контракт Design Agent
+
+Подготовлен DesignAgentInput — совместимое расширение BusinessProfile с optional designPreferences и existingDesignSystem из Website Model. Поля DesignDirection и WebsiteWorkflowState не менялись. Для результата добавлены строгая schema и runtime validator: HEX-палитра, непустой ограниченный текст/массивы, запрет unknown fields, markup/code/URL и credential-looking данных. Небезопасный design останавливается до Content Agent.
+
+Реализован DefaultDesignAgent через createRoutedDesignService → AIRouter → GuardedAIProvider. Входные настройки проверяются и передаются как недоверенные DATA; structured output проходит прежний validator. Общие authorization, scoped credentials, budget и fallback сохранены. Business → Design → Content подключён через createWebsiteWorkflowService; ручной Design smoke добавлен. Новых зависимостей нет. 351 тест проходит, прежние 327 сохранены. [Контракт, лимиты и ограничения](docs/DESIGN-AGENT-CONTRACT.md).
+
+## Ручная проверка Design Agent
+
+```sh
+npm run smoke:design -- --provider=yandex --confirm-paid-request
+npm run smoke:design -- --provider=openai --confirm-paid-request
+```
+
+Каждая команда — один потенциально платный запрос через Design service → AIRouter → GuardedAIProvider → adapter. Без флага подтверждения конфигурация не загружается и запрос не отправляется; неизвестные параметры отклоняются до этого. Автоматические тесты используют только подставной транспорт, не сеть. Применяется учебный профиль «Учебный пример Kleo». `.env` не меняется; настройки providers используются существующие. Лимит — одна попытка, один concurrent request, до 2000 выходных токенов; меньший config limit сохраняется. Fallback smoke не включает.
+
+Вывод: проверенный DesignDirection, provider/model, project/workflow, доступные usage/requestId, routing decision/attempts и budget. Вывод строится по разрешённым полям с независимыми snapshots и redaction; prompts, headers, raw response и конфигурация не выводятся. Реальные Design smoke пока не запускались. Прежние OpenAI/Yandex API и оба Router smoke подтверждены владельцем.
+
+[Design: контракт и ограничения](docs/DESIGN-AGENT-CONTRACT.md). [Будущий учёт токенов, себестоимости и Admin Console](docs/USAGE-COST-ADMIN-PLAN.md): **PLANNED**, только telemetry foundation реализована; никаких billing/quotas/UI/pricing engines пока нет.

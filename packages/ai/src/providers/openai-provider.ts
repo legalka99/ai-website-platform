@@ -1,3 +1,4 @@
+import { containsSecret } from '../../../security/src/redaction.js';
 import { validateExternal } from '../../../security/src/validation.js';
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
@@ -71,7 +72,7 @@ export class OpenAIProvider implements AIProvider {
     const cancel = () => controller.abort();
     request.signal?.addEventListener('abort', cancel, { once: true });
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.#config.timeoutMs);
-    let usage: AIUsageRecord | undefined;
+    let usage: AIUsageRecord = {provider:'openai',model:request.model,timestamp:new Date(started).toISOString(),durationMs:0};
     try {
       const response = await this.#client.responses.create({
         model: request.model, input: request.messages.map(({ role, content }) => ({ role, content })),
@@ -82,12 +83,15 @@ export class OpenAIProvider implements AIProvider {
       const reportedModel = typeof response.model === 'string' && /^[a-zA-Z0-9._:-]{1,100}$/.test(response.model) &&
         !response.model.includes(this.#config.apiKey) && !response.model.startsWith('sk-') ? response.model : request.model;
       usage = { provider: 'openai', model: reportedModel,
-        timestamp: new Date().toISOString(), durationMs: Date.now() - started };
+        timestamp: new Date(started).toISOString(), durationMs: Date.now() - started };
+      const requestId=response._request_id;
+      if(typeof requestId==='string' && /^[a-zA-Z0-9._:-]{1,128}$/.test(requestId) && !containsSecret(requestId,[this.#config.apiKey])) usage.requestId=requestId;
       const tokenCount = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
       if (response.usage) {
         usage.inputTokens = tokenCount(response.usage.input_tokens);
         usage.outputTokens = tokenCount(response.usage.output_tokens);
         usage.totalTokens = tokenCount(response.usage.total_tokens);
+        usage.cachedInputTokens = tokenCount(response.usage.input_tokens_details?.cached_tokens);
       }
       if (response.status === 'incomplete') throw new AIProviderError('INCOMPLETE', usage);
       if (response.status !== 'completed' || !Array.isArray(response.output)) throw new AIProviderError('INVALID_RESPONSE', usage);
@@ -109,6 +113,11 @@ export class OpenAIProvider implements AIProvider {
       return { content: parts[0], structured, model: usage.model, usageRecord: usage,
         usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens } };
     } catch (error) {
+      usage.durationMs=Date.now()-started;
+      if(error instanceof OpenAI.APIError) {
+        const requestId=error.requestID;
+        if(typeof requestId==='string' && /^[a-zA-Z0-9._:-]{1,128}$/.test(requestId) && !containsSecret(requestId,[this.#config.apiKey])) usage.requestId=requestId;
+      }
       if (timedOut || error instanceof OpenAI.APIConnectionTimeoutError) throw new AIProviderError('TIMEOUT', usage);
       if (request.signal?.aborted) throw new AIProviderError('CANCELLED', usage);
       if (error instanceof AIProviderError) throw error;

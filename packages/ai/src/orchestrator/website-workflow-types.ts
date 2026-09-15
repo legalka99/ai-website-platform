@@ -24,5 +24,7 @@ export interface WebsiteWorkflowTask {
 export interface WebsiteWorkflowResult {
   success: boolean;
   state: WebsiteWorkflowState;
+  /** Local per-stage telemetry; optional for backward compatibility, no persistence implied. */
+  executions?: Partial<Record<import('../agent.js').AgentType, NonNullable<import('../agent.js').AgentResult['execution']>>>;
   error?: string;
 }

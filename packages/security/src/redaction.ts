@@ -1,6 +1,6 @@
 const hidden = '[REDACTED]';
 const sensitiveField = /secret|token|password|passwd|credential|authorization|cookie|api.?key|private.?key/i;
-const tokenCounts = new Set(['inputTokens', 'outputTokens', 'totalTokens', 'maxOutputTokens', 'reservedOutputTokens']);
+const tokenCounts = new Set(['inputTokens', 'outputTokens', 'totalTokens', 'cachedInputTokens', 'maxOutputTokens', 'reservedOutputTokens']);
 const patterns = [
   /\bauthorization["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\r\n,;}]+)/gi,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,

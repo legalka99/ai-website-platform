@@ -93,3 +93,11 @@ Kleo может предлагать улучшения и готовить из
 Implemented: OpenAI/Yandex через AIRouter и общий guarded service; deterministic task policy, capabilities, controlled fallback (до 2 attempts), output/request/concurrency budget и local health. Предыдущие 165 тестов сохранены, текущий набор — 222. По сообщению владельца прежние ручные OpenAI/Yandex вызовы успешны; новый Yandex/Router code в этом этапе тестировался без внешних API.
 
 Planned: benchmarks на задачах Kleo, дополнительные providers/self-hosted и более сложная маршрутизация. ProviderEvaluation сейчас только контракт, score не выдумывается. Собственная фундаментальная модель остаётся в прежнем долгосрочном плане. Детали — [AI-ROUTER](AI-ROUTER.md). Следующий Design Agent использует тот же Router, authorization и общий cost guard; без выдачи агенту credentials.
+
+## Real Design и будущий учёт расходов — 15 сентября 2026
+
+Implemented: Design через общий Router/guard, Business → Design → Content workflow и ручной smoke:design (OpenAI/Yandex), строгий opt-in и безопасный вывод. 351 offline тест проходит; реальные Design вызовы остаются ручным следующим шагом. Предыдущие API smoke и оба Router route подтверждены владельцем. Полноценная production tenant isolation по-прежнему требует API/storage enforcement.
+
+Минимальная telemetry foundation сохраняет actor/org/project/workflow/agent, provider/model, доступные tokens/cached counts, timing/requestId и attempts. Workflow возвращает execution этапов; хранилища usage пока нет.
+
+**PLANNED отдельными этапами:** Client Token Quotas → Cost Accounting → Admin Console и profitability/margin analytics; клиентский AI Credits/usage % display. До реализации нужны durable event storage, invocation IDs/deduplication, привязка клиента к billing account, правила периодов/квот, версии тарифов/цен, распределение infra costs и административные роли. Подробный состав, формулы и границы — [USAGE-COST-ADMIN-PLAN](USAGE-COST-ADMIN-PLAN.md). Smoke limits 1 request / до 2000 output tokens не являются клиентским тарифным лимитом. UI, payment/subscription/invoice/pricing/quota engines не создаются этим этапом.

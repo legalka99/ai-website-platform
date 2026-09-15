@@ -14,14 +14,16 @@ export interface RouterBinding { metadata:ProviderMetadata; provider:GuardedAIPr
 function snapshotUsage(usage:AIUsageRecord|undefined):AIUsageRecord|undefined {
   if (!usage) return undefined;
   const snapshot:Partial<AIUsageRecord> = {};
-  for (const field of ['provider','model','timestamp','projectId','workflowId','requestId'] as const) {
+  for (const field of ['provider','model','timestamp','projectId','workflowId','requestId','actorId','organizationId'] as const) {
     const descriptor=Object.getOwnPropertyDescriptor(usage,field);
     if (descriptor && 'value' in descriptor && typeof descriptor.value==='string') snapshot[field]=descriptor.value;
   }
-  for (const field of ['durationMs','inputTokens','outputTokens','totalTokens'] as const) {
+  for (const field of ['durationMs','inputTokens','outputTokens','totalTokens','cachedInputTokens'] as const) {
     const descriptor=Object.getOwnPropertyDescriptor(usage,field);
     if (descriptor && 'value' in descriptor && typeof descriptor.value==='number' && Number.isFinite(descriptor.value)) snapshot[field]=descriptor.value;
   }
+  const agent=Object.getOwnPropertyDescriptor(usage,'agentType');
+  if (agent && 'value' in agent && ['business','design','content','developer','qa'].includes(agent.value)) snapshot.agentType=agent.value;
   return snapshot as AIUsageRecord;
 }
 

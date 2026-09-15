@@ -14,6 +14,7 @@
     "test": "tsc --noEmit false --outDir .test-build && node --test tests/*.test.mjs .test-build/packages/ai/src/orchestrator/tests/*.test.js",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "tsc --noEmit",
+    "smoke:design": "tsc --noEmit false --outDir .test-build && node scripts/smoke-design.mjs",
     "smoke:business": "tsc --noEmit false --outDir .test-build && node scripts/smoke-business.mjs",
     "security:scan": "node scripts/secret-scan.mjs",
     "security:check": "node scripts/security-check.mjs && npm run security:scan",

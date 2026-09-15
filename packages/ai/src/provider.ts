@@ -17,6 +17,11 @@ export interface AIRequest {
 }
 
 export interface AIUsageRecord {
+  /** Server-owned correlation, never copied from model output. */
+  actorId?: string;
+  organizationId?: string;
+  agentType?: import('./agent.js').AgentType;
+  cachedInputTokens?: number;
   requestId?: string;
   projectId?: string;
   workflowId?: string;

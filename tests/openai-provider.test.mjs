@@ -138,3 +138,14 @@ test('timeout cancels a stalled response body after headers arrive',async()=>{
 test('model config cannot accidentally contain the API credential',()=>{
   assert.throws(()=>readOpenAIConfig({OPENAI_API_KEY:testKey,KLEO_AI_MODEL:testKey}),hasCode('INVALID_CONFIG'));
 });
+
+test('OpenAI failure preserves available timing and safe request ID without inventing tokens',async()=>{
+ await assert.rejects(new OpenAIProvider(config,async()=>new Response('{}',{status:503,headers:{'x-request-id':'request-503'}})).generate(request()),error=>{
+  assert.equal(error.usage.requestId,'request-503');assert.equal(error.usage.provider,'openai');assert.ok(error.usage.durationMs>=0);assert.equal(error.usage.totalTokens,undefined);return true;
+ });
+});
+test('OpenAI cached tokens and request ID reject invalid telemetry',async()=>{
+ const b=body();b.usage.input_tokens_details={cached_tokens:-1};
+ const r=await new OpenAIProvider(config,async()=>new Response(JSON.stringify(b),{headers:{'content-type':'application/json','x-request-id':testKey}})).generate(request());
+ assert.equal(r.usageRecord.cachedInputTokens,undefined);assert.equal(r.usageRecord.requestId,undefined);
+});
