@@ -14,13 +14,13 @@ export interface AgentContext<
   metadata?: Record<string, unknown>;
 }
 
-export interface AgentResult<
+export type AgentResult<
   TOutput extends object = Record<string, unknown>,
-> {
-  success: boolean;
-  output: TOutput;
-  error?: string;
-}
+> = ({ success: true; output: TOutput; error?: never } | {
+  success: false; output?: TOutput; error: string; errorCode?: string; missingFields?: string[];
+}) & {
+  execution?: { projectId: string; goal: string; usage?: import('./provider.js').AIUsageRecord };
+};
 
 export interface AIAgent<
   TInput extends object = Record<string, unknown>,

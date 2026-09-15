@@ -13,9 +13,11 @@
     "build": "npm run build --workspaces --if-present",
     "test": "tsc --noEmit false --outDir .test-build && node --test tests/*.test.mjs .test-build/packages/ai/src/orchestrator/tests/*.test.js",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke:business": "tsc --noEmit false --outDir .test-build && node scripts/smoke-business.mjs"
   },
   "devDependencies": {
+    "@types/node": "^26.5.1",
     "typescript": "^7.0.2"
   }
 }
