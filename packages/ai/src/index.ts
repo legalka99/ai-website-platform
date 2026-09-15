@@ -9,3 +9,6 @@ export * from './orchestrator/index.js';
 export * from './contracts/index.js';
 
 export * from './agents/index.js';
+
+export * from './services/guarded-provider.js';
+export * from './services/business-service.js';

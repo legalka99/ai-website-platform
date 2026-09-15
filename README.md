@@ -20,7 +20,8 @@
 - Проверка структуры ответа каждого агента, принадлежности проекта, уникальности идентификаторов и согласованности QA.
 - OpenAIProvider через официальный SDK и Responses API со строгим JSON Schema; заменяемый AIProvider и FakeProvider.
 - DefaultBusinessAgent: разрешённые входные поля → структурированный ответ → существующий runtime validator.
-- 82 автоматических теста; проверка TypeScript.
+- Security Foundation: общие политики доступа, секретов, URL, webhook, инструментов, файлов и лимитов; серверная граница Business Agent.
+- 165 автоматических тестов; проверка TypeScript.
 
 Это ядро разработки. Код подключения первой модели готов, но реальный API-запрос ещё не выполнен. Остальные четыре агента не подключены к API. База данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Workflow возвращает состояние в памяти; долговременное сохранение ещё предстоит реализовать. Проверка схемы данных не заменяет проверку фактов, дизайна и работы сайта.
 
@@ -47,7 +48,7 @@ npm test
 
 ## Первый реальный запрос Business Agent
 
-В корне репозитория создайте локальный `.env` по образцу `.env.example`, если его ещё нет; существующий файл не перезаписывайте. В редакторе заполните `OPENAI_API_KEY` и `KLEO_AI_MODEL`. Ключ вводится только локально: не отправляйте его в чат, не включайте в исходники или Git. `.env` исключён из Git. Модель должна быть доступна вашему API-проекту и поддерживать Responses API и Structured Outputs; её доступность ещё не проверена. При отсутствии ключа скрипт выдаёт понятную ошибку.
+В корне репозитория создайте локальный `.env` по образцу `.env.example`, если его ещё нет; существующий файл не перезаписывайте. В редакторе заполните `OPENAI_API_KEY` и `KLEO_AI_MODEL`. Установите права файла `600` (команда `chmod 600 .env`); smoke отклоняет чужой, доступный другим пользователям или символически связанный файл. Локальный smoke разрешён только в development/test. В staging/production нужен серверный SecretProvider, dotenv рядом с кодом запрещён. Ключ вводится только локально: не отправляйте его в чат, не включайте в исходники или Git. `.env` исключён из Git. Модель должна быть доступна вашему API-проекту и поддерживать Responses API и Structured Outputs; её доступность ещё не проверена. При отсутствии ключа скрипт выдаёт понятную ошибку.
 
 После локальной настройки выполните из `/Users/kirill/ai-website-platform`:
 
@@ -55,7 +56,7 @@ npm test
 npm run smoke:business -- --confirm-paid-request
 ```
 
-Это явное разрешение на один потенциально платный запрос с вымышленным учебным бизнесом. Без флага команда `npm run smoke:business` не отправляет запрос. Автоматические тесты проверяют только защиту запуска, FakeProvider и SDK с подставленным сетевым транспортом; реальный smoke test в них не запускается. Скрипт показывает профиль и расход либо безопасное сообщение об ошибке.
+Скрипт использует серверный createBusinessService, scoped SecretProvider и ограничение одного вызова. Это явное разрешение на один потенциально платный запрос с вымышленным учебным бизнесом. Без флага команда `npm run smoke:business` не отправляет запрос. Автоматические тесты проверяют только защиту запуска, FakeProvider и SDK с подставленным сетевым транспортом; реальный smoke test в них не запускается. Скрипт показывает профиль и расход либо безопасное сообщение об ошибке.
 
 ## Контракт и ограничения первого агента
 
@@ -72,3 +73,20 @@ npm run smoke:business -- --confirm-paid-request
 Реализовано в коде и проверено без сети: протокол запроса, схемы, ошибки, отмена, лимиты и защита ручного запуска. **Не проверены реальным API:** доступ к модели, её фактический ответ, качество фактов, реальный расход и производственная эксплуатация.
 
 Основа реализации: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) и [официальный SDK OpenAI для JavaScript/TypeScript](https://github.com/openai/openai-node).
+
+## Security Foundation — текущий статус
+
+**Implemented:** отдельный `packages/security`; redaction и structured logger; resource validation и DATA policy; scoped secret references и local/test store; authorization roles; URL/DNS/redirect policies; test HMAC webhook/replay; tool permissions и preview/approval; file metadata validation; default-deny SandboxRunner; HTTP config; in-memory rate/cost guards. Business Agent создаётся через серверную фабрику в ручном smoke; ключ разрешается только серверным слоем. Все 82 прежних теста сохранены, добавлены 83 проверки.
+
+**Partially implemented:** policies без публичного API не обеспечивают сквозную изоляцию клиентов, SSRF, auth и безопасность uploads. Авторизация требует доверенной сессии, URL transport — закрепления проверенного IP, webhook — реального протокола и общего replay store, лимиты — общей серверной инстанции и будущего durable storage. Тесты с fake transport не доказывают защиту от компрометации самого процесса Node.js.
+
+**Planned:** production secret manager, регистрация/MFA, middleware HTTP/CSRF, база с tenant enforcement, pinned HTTP client, безопасный renderer/preview, production sandbox, distributed limits, WAF/DDoS, backups и alerting. Реальные API этим этапом не вызывались.
+
+```sh
+npm run security:check
+npm run security:audit
+```
+
+Первая команда проверяет ignore rules, `.env` metadata, простые границы исходников и секреты в текущих файлах, включая архивы; не выводит найденные значения. Это эвристики, не полный аудит или scan Git history. Вторая проверяет известные уязвимости через npm registry; автоматически ничего не обновляет. Новых сторонних зависимостей для security нет.
+
+Документы: [границы и использование](docs/SECURITY-FOUNDATION.md), [checklist](docs/SECURITY-CHECKLIST.md), [модель угроз](docs/THREAT-MODEL.md), [инциденты и восстановление](docs/INCIDENT-RESPONSE.md), [приватное сообщение об уязвимости](SECURITY.md).

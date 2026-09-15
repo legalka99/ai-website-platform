@@ -117,3 +117,23 @@ test('invalid and oversized requests fail without transport', async () => {
   for (const value of [{ ...request(), messages: [{ role: 'user', content: testKey }] }, { ...request(), maxTokens: 1001 }, { ...request(), model: 'another-model' }, { ...request(), structuredOutput: undefined },
     { ...request(), messages: [{ role: 'user', content: 'a'.repeat(25000) }] }]) await assert.rejects(provider.generate(value), hasCode('INVALID_REQUEST'));
 });
+
+test('rejects oversized or secret-bearing schema before transport', async () => {
+  const provider = new OpenAIProvider(config, async () => assert.fail('Network must not run'));
+  for (const schema of [{ type:'string', description:testKey }, { type:'string', description:'x'.repeat(33000) }]) {
+    await assert.rejects(provider.generate({...request(),structuredOutput:{name:'test',schema}}),hasCode('INVALID_REQUEST'));
+  }
+});
+test('response body size bound cancels oversized upstream stream without echoing it',async()=>{
+  let cancelled=false;
+  const provider = new OpenAIProvider(config,async()=>new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(1048577));},cancel(){cancelled=true;}})));
+  await assert.rejects(provider.generate(request()),hasCode('INVALID_RESPONSE'));assert.equal(cancelled,true);
+});
+test('timeout cancels a stalled response body after headers arrive',async()=>{
+  let cancelled=false;
+  const provider=new OpenAIProvider({...config,timeoutMs:100},async()=>new Response(new ReadableStream({cancel(){cancelled=true;}})));
+  await assert.rejects(provider.generate(request()),hasCode('TIMEOUT'));assert.equal(cancelled,true);
+});
+test('model config cannot accidentally contain the API credential',()=>{
+  assert.throws(()=>readOpenAIConfig({OPENAI_API_KEY:testKey,KLEO_AI_MODEL:testKey}),hasCode('INVALID_CONFIG'));
+});

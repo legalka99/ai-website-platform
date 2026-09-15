@@ -14,7 +14,10 @@
     "test": "tsc --noEmit false --outDir .test-build && node --test tests/*.test.mjs .test-build/packages/ai/src/orchestrator/tests/*.test.js",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "tsc --noEmit",
-    "smoke:business": "tsc --noEmit false --outDir .test-build && node scripts/smoke-business.mjs"
+    "smoke:business": "tsc --noEmit false --outDir .test-build && node scripts/smoke-business.mjs",
+    "security:scan": "node scripts/secret-scan.mjs",
+    "security:check": "node scripts/security-check.mjs && npm run security:scan",
+    "security:audit": "npm audit --audit-level=high"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

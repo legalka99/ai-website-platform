@@ -1,3 +1,4 @@
+import { validateExternal } from '../../../security/src/validation.js';
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
 import type { AIProvider, AIRequest, AIResponse, AIUsageRecord } from '../provider.js';
@@ -23,12 +24,21 @@ export class OpenAIProvider implements AIProvider {
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let size = 0;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.byteLength;
-          if (size > MAX_RESPONSE_BYTES) { await reader.cancel(); throw new AIProviderError('INVALID_RESPONSE'); }
-          chunks.push(value);
+        let abortRead: () => void = () => {};
+        const cancelled = new Promise<never>((_, reject) => { abortRead = () => reject(new AIProviderError('CANCELLED')); });
+        init?.signal?.addEventListener('abort', abortRead, { once: true });
+        try {
+          if (init?.signal?.aborted) abortRead();
+          while (true) {
+            const { done, value } = await Promise.race([reader.read(), cancelled]);
+            if (done) break;
+            size += value.byteLength;
+            if (size > MAX_RESPONSE_BYTES) throw new AIProviderError('INVALID_RESPONSE');
+            chunks.push(value);
+          }
+        } finally {
+          init?.signal?.removeEventListener('abort', abortRead);
+          void reader.cancel().catch(() => {});
         }
         const body = new Uint8Array(size);
         let offset = 0;
@@ -48,6 +58,8 @@ export class OpenAIProvider implements AIProvider {
           (request.temperature !== undefined && (!Number.isFinite(request.temperature) || request.temperature < 0 || request.temperature > 2))) {
         throw new AIProviderError('INVALID_REQUEST');
       }
+      validateExternal(request.structuredOutput.schema, () => true, { maxBytes: 32000, maxString: 8000, maxArray: 100, maxDepth: 12, maxNodes: 2000 });
+      if (JSON.stringify(request.structuredOutput).includes(this.#config.apiKey)) throw new AIProviderError('INVALID_REQUEST');
       validate = new Ajv({ strict: true, allErrors: false }).compile(request.structuredOutput.schema);
     } catch { throw new AIProviderError('INVALID_REQUEST'); }
     const maxTokens = request.maxTokens ?? this.#config.maxOutputTokens;
@@ -102,6 +114,7 @@ export class OpenAIProvider implements AIProvider {
       if (error instanceof AIProviderError) throw error;
       if (error instanceof OpenAI.APIError && (error.status === 401 || error.status === 403)) throw new AIProviderError('AUTH', usage);
       if (error instanceof OpenAI.APIError && error.status === 429) throw new AIProviderError('RATE_LIMIT', usage);
+      if (error instanceof OpenAI.APIConnectionError && error.cause instanceof AIProviderError) throw new AIProviderError(error.cause.code, usage);
       if (error instanceof OpenAI.APIConnectionError) throw new AIProviderError('NETWORK', usage);
       if (error instanceof OpenAI.APIError) throw new AIProviderError('API_ERROR', usage);
       throw new AIProviderError('INVALID_RESPONSE', usage);

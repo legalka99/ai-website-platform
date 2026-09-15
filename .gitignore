@@ -17,3 +17,16 @@ coverage/
 .idea/
 
 .test-build/
+
+# Local credentials and private key material
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa*
+id_ed25519*
+.secrets/
+secrets.local.*
+credentials.local.*
+*.tsbuildinfo
