@@ -91,3 +91,22 @@ test('successful provider attempt with CTA mismatch reports exact rule without r
  assert.deepEqual(diagnosed.validationError,{stage:'content-semantic',path:'sections[0].callToAction',rule:'CTA_NOT_ALLOWED'});
  assert.equal(diagnosed.execution.routing.attempts[0].outcome,'success');assert.equal(diagnosed.execution.usage.totalTokens,30);assert.equal(retry.counts.yandex,0);assert.ok(!JSON.stringify(diagnosed).includes('Get a quote'));assert.equal(diagnosed.output,undefined);
 });
+
+for(const primary of ['openai','yandex'])test(`grounding failure after ${primary} success never invokes fallback and preserves telemetry`,async()=>{
+ const output=businessWire();output.sections[0].text='High quality';const opts=options(primary,undefined,output);
+ const result=await(await createRoutedContentService(opts)).run(businessContext());
+ assert.equal(result.success,false);assert.equal(result.output,undefined);assert.equal(result.errorCode,'INVALID_RESPONSE');
+ assert.deepEqual(result.validationError,{stage:'content-grounding',path:'sections[0].text',rule:'UNGROUNDED_QUALITY_CLAIM'});
+ assert.equal(opts.counts[primary],1);assert.equal(opts.counts[primary==='openai'?'yandex':'openai'],0);
+ assert.equal(result.execution.routing.attempts[0].outcome,'success');assert.equal(result.execution.budget.requests,1);
+ for(const [key,value] of Object.entries({provider:primary,agentType:'content',actorId:'owner',organizationId:'org-1',projectId:'project-1',workflowId:'run-1',totalTokens:30}))assert.equal(result.execution.usage[key],value);
+ assert.ok(!JSON.stringify(result).includes('High quality'));
+});
+test('explicit confirmed facts are detached DATA and support a complete risky clause',async()=>{
+ const context=businessContext();context.input.businessFacts=['High quality'];const opts=options('openai');let seen=false;
+ opts.providers.find(p=>p.id==='openai').testAdapter=new FakeProvider(req=>{
+  seen=true;const data=JSON.parse(req.messages[1].content);assert.deepEqual(data.businessFacts,['High quality']);assert.ok(data.groundingFacts.includes('High quality'));assert.equal(req.messages[0].content,CONTENT_INSTRUCTIONS);
+  const p=businessWire();p.sections[0].text='High quality';return {model:req.model,structured:p,content:JSON.stringify(p)};
+ });
+ assert.equal((await(await createRoutedContentService(opts)).run(context)).success,true);assert.equal(seen,true);assert.deepEqual(context.input.businessFacts,['High quality']);
+});

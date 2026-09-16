@@ -1,3 +1,5 @@
+import { validateContentGrounding } from '../validation/content-grounding-validator.js';
+import type { ContentPlan } from '../contracts/content-plan.js';
 import type { AIAgent, AgentType } from '../agent.js';
 import { validateWebsiteAgentOutput } from './website-result-validator.js';
 import type { WebsiteWorkflowState } from '../contracts/website-workflow-state.js';
@@ -19,6 +21,10 @@ export class WebsiteWorkflowOrchestrator {
       const validation = validateWebsiteAgentOutput(expectedStage, result.output, task.projectId);
       if (!validation.valid) {
         throw new Error(`Validation failed: ${validation.issues.map(issue => `${issue.field}: ${issue.message}`).join('; ')}`);
+      }
+      if(expectedStage==='content' && state.business && state.design) {
+        const grounding=validateContentGrounding(result.output as ContentPlan,{business:state.business,design:state.design});
+        if(grounding) throw new Error(`Content validation failed: ${grounding.stage} ${grounding.path} ${grounding.rule}`);
       }
       return result.output;
     };

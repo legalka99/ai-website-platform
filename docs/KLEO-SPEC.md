@@ -206,3 +206,10 @@ Content — структурированный секционный план с 
 Изоляция tenant обязательна для всех клиентских данных, AI context/history, credentials, usage/billing, logs, backups и artifacts. Сервер проверяет tenant/organization, project, actor permissions и ownership; client IDs не являются доказательством доступа. Least privilege обязателен для пользователей, сервисов, workers, agents, tools и integrations. Каждый tool call авторизуется отдельно.
 
 **IMPLEMENTED:** существующие локальные provider guards, validation, redaction и ограничители запросов/бюджета в пределах текущего runtime. **PLANNED:** production auth/storage/infra enforcement, durable usage/cost controls, Kleo Sentinel и Red Team tooling. Sentinel дополняет deterministic guards, без произвольных destructive/admin/billing/secret полномочий. Для будущих AI workflows обязательны детерминированные лимиты шагов, вызовов/tools, retries/fallback, времени, входа/выхода, total tokens, cost и cancellation. Текущие и недостающие ограничения перечислены в Security Architecture.
+
+
+## Content business grounding — 16 сентября 2026
+
+Implemented: Content uses confirmed BusinessProfile and optional explicit businessFacts as source of truth; DesignDirection is not authority for business claims. Prompt/schema guidance and deterministic RU/EN high-risk claim validation complement existing runtime/security checks. Recognized unsupported commercial claims are rejected before state.content/Website Model, without retry or fallback. Missing facts are omitted or requested in notes; style is distinguished from company qualities. General factual truth is not proven by these checks.
+
+576 offline tests pass, including both provider adapters with fake transport and grounding failures with preserved telemetry. New input constraints, exact supported risky clauses, safe derivations, diagnostics and limitations: [CONTENT-AGENT](CONTENT-AGENT.md). No live requests, new dependencies or changes to Router/security guards. Real Developer/QA and Kleo Sentinel remain PLANNED; mandatory pentest and public Security Gate remain in force.

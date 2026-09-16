@@ -20,8 +20,9 @@ export const contentWireSchema:Record<string,unknown>=JSON.parse(JSON.stringify(
 }));
 export function validateContentInput(value:unknown):ContentAgentInput {
   validateExternal(value,plainJSON,{maxBytes:20000,maxString:8000,maxArray:50,maxDepth:5,maxNodes:600});
-  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['business','design'].includes(k))) throw new SecurityError('INVALID_INPUT');
+  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['business','design','businessFacts'].includes(k))) throw new SecurityError('INVALID_INPUT');
   const input=value as ContentAgentInput;
+  if(input.businessFacts!==undefined && (!Array.isArray(input.businessFacts)||input.businessFacts.length===0||input.businessFacts.length>20||input.businessFacts.some(f=>typeof f!=='string'||!f.trim()||f.length>500||!isSafeContentText(f)))) throw new SecurityError('INVALID_INPUT');
   const business=validateDesignInput(input.business);
   if(Object.keys(business).some(k=>!(businessFields as readonly string[]).includes(k)) ||
     !validateWebsiteAgentOutput('business',business,'').valid || !validateDesignDirection(input.design).valid) throw new SecurityError('INVALID_INPUT');
