@@ -12,12 +12,13 @@ export interface AgentContext<
   goal: string;
   input: TInput;
   metadata?: Record<string, unknown>;
+  signal?: AbortSignal;
 }
 
 export type AgentResult<
   TOutput extends object = Record<string, unknown>,
 > = ({ success: true; output: TOutput; error?: never } | {
-  success: false; validationError?: import('./contracts/content-validation-error.js').ContentValidationError; output?: TOutput; error: string; errorCode?: string; missingFields?: string[];
+  success: false; validationError?: import('./contracts/content-validation-error.js').ContentValidationError | import('./contracts/developer-validation-error.js').DeveloperValidationError; output?: TOutput; error: string; errorCode?: string; missingFields?: string[];
 }) & {
   execution?: { routing?: import('./router/types.js').RoutingRecord; projectId: string; goal: string; usage?: import('./provider.js').AIUsageRecord; budget?: import('../../security/src/rate-limit.js').AIBudgetMetadata };
 };

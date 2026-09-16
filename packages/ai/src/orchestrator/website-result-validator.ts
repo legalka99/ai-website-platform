@@ -1,3 +1,4 @@
+import { validateDeveloperOutput } from '../validation/developer-output-validator.js';
 import { validateContentPlan } from '../validation/content-plan-validator.js';
 import { validateDesignDirection } from '../validation/design-direction-validator.js';
 import type { AgentType } from '../agent.js';
@@ -42,26 +43,7 @@ const timestamp: Rule = (value, path, issues) => {
     issue(issues, path, 'Expected an ISO date and time.');
   }
 };
-const colors = object({ primary: text, secondary: optional(text), background: text, text, accent: optional(text) });
-const block = object({
-  id: text, type: choice('hero', 'text', 'image', 'services', 'advantages', 'gallery', 'faq', 'testimonials', 'contacts', 'cta', 'custom'),
-  order: number(0, Infinity, true), visible: boolean, content: record, settings: optional(record),
-});
-const page = object({
-  id: text, slug: text, title: text, status: choice('draft', 'published'), order: number(0, Infinity, true),
-  blocks: array(block, 1), seo: optional(object({ title: optional(text), description: optional(text), keywords: optional(array(text)) })),
-});
-const website = object({
-  id: text, projectId: text, name: text, status: choice('draft', 'published', 'archived'),
-  designSystem: object({
-    colors,
-    typography: object({ headingFont: text, bodyFont: text, baseFontSize: number(1) }),
-    spacing: object({ section: number(0), block: number(0) }), borderRadius: number(0),
-  }),
-  pages: array(page, 1), createdAt: timestamp, updatedAt: timestamp,
-});
-
-const rules: Record<AgentType, Rule> = {
+const rules: Record<Exclude<AgentType,'developer'>, Rule> = {
   business: object({
     companyName: text, industry: text, description: text, productsOrServices: array(text, 1), targetAudience: array(text, 1),
     geography: optional(array(text)), advantages: optional(array(text)), websiteGoals: array(text, 1),
@@ -69,7 +51,6 @@ const rules: Record<AgentType, Rule> = {
   }),
   design: (value, _path, issues) => { issues.push(...validateDesignDirection(value).issues); },
   content: (value, _path, issues) => { issues.push(...validateContentPlan(value).issues); },
-  developer: object({ website, generatedAt: timestamp, notes: optional(text) }),
   qa: object({
     passed: boolean, score: number(0, 100), checkedAt: timestamp, notes: optional(text),
     issues: array(object({ code: text, severity: choice('info', 'warning', 'error', 'critical'), message: text,
@@ -79,6 +60,7 @@ const rules: Record<AgentType, Rule> = {
 
 /** Runtime boundary for agent responses. This verifies data, not visual quality or business facts. */
 export function validateWebsiteAgentOutput(stage: AgentType, output: unknown, projectId: string): ValidationResult {
+  if(stage==='developer') return validateDeveloperOutput(output,projectId);
   const issues: ValidationIssue[] = [];
   rules[stage](output, stage, issues);
   if (issues.length || !isObject(output)) return { valid: false, issues };
@@ -89,25 +71,6 @@ export function validateWebsiteAgentOutput(stage: AgentType, output: unknown, pr
       issue(issues, 'qa.passed', 'A passing report cannot contain blocking errors.', 'QA_CONTRADICTION');
     }
   }
-  if (stage === 'developer') {
-    const site = output.website as Record<string, unknown>;
-    if (site.projectId !== projectId) issue(issues, 'developer.website.projectId', 'Website belongs to another project.', 'PROJECT_MISMATCH');
-    if (site.status !== 'draft') issue(issues, 'developer.website.status', 'Generated websites must remain drafts.', 'DRAFT_REQUIRED');
-    const pages = site.pages as Record<string, unknown>[];
-    const pageIds = new Set<unknown>();
-    const slugs = new Set<unknown>();
-    const blockIds = new Set<unknown>();
-    const unique = (seen: Set<unknown>, value: unknown, path: string) => {
-      if (seen.has(value)) issue(issues, path, 'Duplicate identifier or page address.', 'DUPLICATE_VALUE');
-      seen.add(value);
-    };
-    pages.forEach((entry, pageIndex) => {
-      const path = `developer.website.pages[${pageIndex}]`;
-      unique(pageIds, entry.id, `${path}.id`);
-      unique(slugs, entry.slug, `${path}.slug`);
-      if (entry.status !== 'draft') issue(issues, `${path}.status`, 'Generated pages must remain drafts.', 'DRAFT_REQUIRED');
-      (entry.blocks as Record<string, unknown>[]).forEach((item, blockIndex) => unique(blockIds, item.id, `${path}.blocks[${blockIndex}].id`));
-    });
-  }
+
   return { valid: issues.length === 0, issues };
 }

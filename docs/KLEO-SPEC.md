@@ -1,5 +1,7 @@
 # Kleo — единое ТЗ и план разработки
 
+**Актуальная контрольная точка — Real Developer Agent (16 сентября 2026):** реализован Business → Design → grounded Content → real routed Developer → текущий переданный QA. LLM возвращает только bounded layout proposal, сервер собирает canonical Website, IDs/даты и draft-only status; copy не переписывается. Input — BusinessProfile, DesignDirection, ContentPlan и optional businessFacts, projectId берётся из server context. [Полная спецификация Developer](DEVELOPER-AGENT.md). 730 offline тестов. Real QA, renderer, preview, storage, publishing/CMS, billing и Sentinel не реализованы. Ниже сохраняется история предыдущих этапов; текущий статус задаёт этот раздел.
+
 Версия 0.9 · 15 сентября 2026 · Владелец проекта: Кирилл
 
 ## Назначение

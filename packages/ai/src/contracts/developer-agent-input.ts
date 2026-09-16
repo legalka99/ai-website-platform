@@ -6,4 +6,6 @@ export interface DeveloperAgentInput {
   business: BusinessProfile;
   design: DesignDirection;
   content: ContentPlan;
+  /** Optional explicit confirmed facts, same bounds as Content input. */
+  businessFacts?: string[];
 }

@@ -1,5 +1,7 @@
 # Kleo — модель, защита и постоянное развитие
 
+**Текущее дополнение — Real Developer Agent:** IMPLEMENTED — strict layout proposal → серверный canonical Website draft, повторная runtime/copy validation, общий Router/guards, workflow integration, безопасные diagnostics и ручной smoke. 730 offline тестов. Следующий шаг: по одному ручному OpenAI/Yandex Developer smoke и review Website Model; Real QA — отдельный будущий этап. Renderer/preview, storage, publishing, CMS, production billing и Sentinel остаются PLANNED. Public pentest / AI Red Team и Security Gate остаются обязательными, но не выполненными. [Детали этапа](DEVELOPER-AGENT.md). Предыдущие числовые результаты ниже исторические.
+
 План 0.3 · 15 сентября 2026 · Дополнение к KLEO-SPEC.md
 
 Статус: **Partially implemented**. Обучение и эксплуатационный мониторинг остаются Planned. Реализован Security Foundation, описанный ниже; 222 offline теста включают прежние 82 и не заменяют аудит публичного сервиса.

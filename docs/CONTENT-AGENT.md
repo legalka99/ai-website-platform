@@ -1,5 +1,7 @@
 # Real Content Agent
 
+**Обновление следующего этапа:** Real Developer теперь подключён после Content. Он повторно проверяет Content grounding, получает только layout proposal от LLM и структурно копирует Content в canonical Website draft; новая коммерческая copy запрещена. [Developer contract и ограничения](DEVELOPER-AGENT.md). По сообщению владельца OpenAI Content live smoke прошёл, Yandex Content был корректно остановлен grounding validator. Исторические формулировки о будущей реализации Developer ниже относятся к предыдущим этапам.
+
 **IMPLEMENTED:** existing Content contract, strict schema/runtime validation, DefaultContentAgent, routed service, WebsiteWorkflow integration, manual smoke infrastructure. Business and Design real OpenAI/Yandex smokes and commit 776fd1d are confirmed by the owner. Content has been tested offline only; its real smoke remains a manual next step.
 
 ## Exact contracts

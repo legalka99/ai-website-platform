@@ -18,6 +18,7 @@ export interface WebsiteWorkflowAgents {
 export interface WebsiteWorkflowTask {
   projectId: string;
   goal: string;
+  signal?: AbortSignal;
   input: Record<string, unknown>;
 }
 
@@ -27,4 +28,5 @@ export interface WebsiteWorkflowResult {
   /** Local per-stage telemetry; optional for backward compatibility, no persistence implied. */
   executions?: Partial<Record<import('../agent.js').AgentType, NonNullable<import('../agent.js').AgentResult['execution']>>>;
   error?: string;
+  validationError?: import('../contracts/developer-validation-error.js').DeveloperValidationError;
 }

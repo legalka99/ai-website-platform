@@ -1,5 +1,7 @@
 # Kleo
 
+**Текущий статус — Real Developer Agent:** Business, Design, Content с grounding и Developer подключены к Router. Developer формирует только canonical Website draft через строгий layout proposal и серверную сборку. Real QA, renderer/preview, storage, publishing, CMS и Sentinel остаются PLANNED. 730 offline тестов; Developer live smoke ещё не выполнялся. [Контракт, границы и ручная проверка](docs/DEVELOPER-AGENT.md). Числа и следующие шаги в датированных разделах ниже отражают прежние этапы.
+
 Платформа ИИ-агентов для создания и развития сайтов. Первый сценарий — создание страниц по одной, редактирование блоков, предпросмотр и тестовый перенос в Tilda.
 
 ## Документация
