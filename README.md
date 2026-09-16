@@ -24,7 +24,7 @@
 - OpenAI и YandexProvider за единым Router с контролируемым fallback и общей защитой бюджета.
 - 294 автоматических теста; проверка TypeScript.
 
-Это ядро разработки. По сообщению владельца, прежний OpenAI Business smoke и отдельный Yandex запрос из Terminal прошли. В актуальном задании владелец подтвердил реальные OpenAI/Yandex routes. Business и Design подключены к Router; реальный Design smoke ещё требуется. Content/Developer/QA не подключены к API. База данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Workflow возвращает состояние в памяти; долговременное сохранение ещё предстоит реализовать. Проверка схемы данных не заменяет проверку фактов, дизайна и работы сайта.
+Это ядро разработки. По сообщению владельца, прежний OpenAI Business smoke и отдельный Yandex запрос из Terminal прошли. В актуальном задании владелец подтвердил реальные OpenAI/Yandex routes. Business и Design подключены к Router; реальные Design smoke через OpenAI/Yandex подтверждены владельцем. Content подключён к Router и готов к ручному smoke; Developer/QA ещё не подключены к API. База данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Workflow возвращает состояние в памяти; долговременное сохранение ещё предстоит реализовать. Проверка схемы данных не заменяет проверку фактов, дизайна и работы сайта.
 
 ## Проверка проекта
 
@@ -125,6 +125,33 @@ npm run smoke:design -- --provider=openai --confirm-paid-request
 
 Каждая команда — один потенциально платный запрос через Design service → AIRouter → GuardedAIProvider → adapter. Без флага подтверждения конфигурация не загружается и запрос не отправляется; неизвестные параметры отклоняются до этого. Автоматические тесты используют только подставной транспорт, не сеть. Применяется учебный профиль «Учебный пример Kleo». `.env` не меняется; настройки providers используются существующие. Лимит — одна попытка, один concurrent request, до 2000 выходных токенов; меньший config limit сохраняется. Fallback smoke не включает.
 
-Вывод: проверенный DesignDirection, provider/model, project/workflow, доступные usage/requestId, routing decision/attempts и budget. Вывод строится по разрешённым полям с независимыми snapshots и redaction; prompts, headers, raw response и конфигурация не выводятся. Реальные Design smoke пока не запускались. Прежние OpenAI/Yandex API и оба Router smoke подтверждены владельцем.
+Вывод: проверенный DesignDirection, provider/model, project/workflow, доступные usage/requestId, routing decision/attempts и budget. Вывод строится по разрешённым полям с независимыми snapshots и redaction; prompts, headers, raw response и конфигурация не выводятся. Владелец подтвердил реальные Design smoke через OpenAI/Yandex и коммит 776fd1d. Прежние OpenAI/Yandex API и оба Router smoke подтверждены владельцем.
 
 [Design: контракт и ограничения](docs/DESIGN-AGENT-CONTRACT.md). [Будущий учёт токенов, себестоимости и Admin Console](docs/USAGE-COST-ADMIN-PLAN.md): **PLANNED**, только telemetry foundation реализована; никаких billing/quotas/UI/pricing engines пока нет.
+
+## Real Content Agent
+
+Implemented: DefaultContentAgent, строгая schema/runtime validation существующего ContentPlan, routed-content-service, подключение к Business → Design → Content → Developer и ручной smoke. ContentAgentInput остаётся `{ business: BusinessProfile, design: DesignDirection }`; goal задаёт назначение страницы. Никаких HTML/CSS/React/Website blocks или внешнего SEO-поиска.
+
+```sh
+npm run smoke:content -- --provider=yandex --confirm-paid-request
+npm run smoke:content -- --provider=openai --confirm-paid-request
+```
+
+Без paid opt-in конфигурация не загружается, сеть не вызывается. Используется учебный профиль стекольной компании и нейтральный DesignDirection; один запрос через service → Router → guard → adapter, до 2000 output tokens. Вывод — проверенный ContentPlan и безопасная telemetry без prompts/keys/headers/raw response. Реальные Content API-вызовы в этом этапе не выполнялись, .env не менялся.
+
+442 offline теста проходят, новых зависимостей нет. Grounding задаётся системной политикой; CTA дополнительно должен точно совпадать с одним desiredActions. Фактическая точность live copy требует проверки человеком. [Точный контракт, лимиты и границы Content](docs/CONTENT-AGENT.md).
+
+Planned: Real Developer/QA, SEO/GEO, persistence, client quotas, cost accounting и Admin Console. Telemetry сохраняет agentType=content и прежние связи для будущего учёта; финансовые движки и UI не реализованы.
+
+
+Диагностика Content smoke: после INVALID_RESPONSE теперь доступен value-free `validationError {stage, path, rule}`. Request-specific wire schema согласована с exact CTA и проверками copy/CTA/FAQ внутри секции. Runtime/security ограничения сохранены. 457 offline тестов проходят; причина конкретного предыдущего live-отказа без его диагностики остаётся неизвестной. Подробности — docs/CONTENT-AGENT.md (раздел диагностики).
+
+
+## Постоянный Security-by-Design и public release gate
+
+Обязательный источник требований: [Security Architecture](docs/KLEO-SECURITY-ARCHITECTURE.md). **REQUIRED BEFORE PUBLIC LAUNCH:** полный авторизованный security review/pentest и AI Red Team, remediation и Retest PASS. Любой незакрытый Critical/High блокирует публичный запуск. Medium/Low требуют оценки риска, владельца, плана и срока. Gate сейчас документирован как процесс; автоматический CI gate не реализован.
+
+Изоляция tenant обязательна для всех клиентских данных, AI context/history, credentials, usage/billing, logs, backups и artifacts. Сервер проверяет tenant/organization, project, actor permissions и ownership; client IDs не являются доказательством доступа. Least privilege обязателен для пользователей, сервисов, workers, agents, tools и integrations. Каждый tool call авторизуется отдельно.
+
+**IMPLEMENTED:** существующие локальные provider guards, validation, redaction и ограничители запросов/бюджета в пределах текущего runtime. **PLANNED:** production auth/storage/infra enforcement, durable usage/cost controls, Kleo Sentinel и Red Team tooling. Sentinel дополняет deterministic guards, без произвольных destructive/admin/billing/secret полномочий. Для будущих AI workflows обязательны детерминированные лимиты шагов, вызовов/tools, retries/fallback, времени, входа/выхода, total tokens, cost и cancellation. Текущие и недостающие ограничения перечислены в Security Architecture.

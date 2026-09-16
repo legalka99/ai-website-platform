@@ -49,3 +49,16 @@ UI, агрегаты, cost database, provider balance synchronization и адм�
 ## Client UI — PLANNED
 
 Понятные AI Credits / usage %, например использовано 68%, осталось 32%. Клиенту не обязательно видеть внутренние цены токенов OpenAI/Yandex. Внутренняя Admin Console должна показывать реальные расходы. Клиентский usage UI пока не реализован.
+
+## Content telemetry readiness
+
+Real Content использует ту же инфраструктуру: agentType=content назначается сервером, usage/routing/budget сохраняются в AgentResult и WebsiteWorkflowResult.executions.content. Отдельных цен, quota/cost engines или Admin UI нет. Content smoke имеет технический потолок одна попытка / до 2000 выходных токенов, а не тарифный лимит клиента. Caller обязан разделять общий guard между этапами и назначать workflowId доверенным сервером. Реальные данные пока возвращаются в памяти; durable cost ledger остаётся PLANNED.
+
+
+## Постоянный Security-by-Design и public release gate
+
+Обязательный источник требований: [Security Architecture](KLEO-SECURITY-ARCHITECTURE.md). **REQUIRED BEFORE PUBLIC LAUNCH:** полный авторизованный security review/pentest и AI Red Team, remediation и Retest PASS. Любой незакрытый Critical/High блокирует публичный запуск. Medium/Low требуют оценки риска, владельца, плана и срока. Gate сейчас документирован как процесс; автоматический CI gate не реализован.
+
+Изоляция tenant обязательна для всех клиентских данных, AI context/history, credentials, usage/billing, logs, backups и artifacts. Сервер проверяет tenant/organization, project, actor permissions и ownership; client IDs не являются доказательством доступа. Least privilege обязателен для пользователей, сервисов, workers, agents, tools и integrations. Каждый tool call авторизуется отдельно.
+
+**IMPLEMENTED:** существующие локальные provider guards, validation, redaction и ограничители запросов/бюджета в пределах текущего runtime. **PLANNED:** production auth/storage/infra enforcement, durable usage/cost controls, Kleo Sentinel и Red Team tooling. Sentinel дополняет deterministic guards, без произвольных destructive/admin/billing/secret полномочий. Для будущих AI workflows обязательны детерминированные лимиты шагов, вызовов/tools, retries/fallback, времени, входа/выхода, total tokens, cost и cancellation. Текущие и недостающие ограничения перечислены в Security Architecture.

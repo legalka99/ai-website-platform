@@ -15,8 +15,19 @@ const credentials = /\b(?:password|passwd|secret|token|credential|authorization|
 /** Detection is conservative, not a proof that arbitrary prose cannot contain an undisclosed secret.
  * Always treat accepted strings as text, never executable content or a URL to fetch.
  */
+export type TextViolation = 'UNSAFE_URL' | 'UNSAFE_HTML' | 'UNSAFE_CREDENTIAL' | 'UNSAFE_CODE' | 'UNSAFE_SHELL' | 'UNSAFE_CHARACTERS' | 'UNSAFE_EMPTY_TEXT';
+/** Fixed detector identifiers only; never return a match or rejected value. */
+export function designTextViolation(value:string):TextViolation|undefined {
+  if(credentials.test(value)||containsSecret(value)) return 'UNSAFE_CREDENTIAL';
+  if(/<\/?[a-z!][^>]*>/i.test(value)) return 'UNSAFE_HTML';
+  if(address.test(value)) return 'UNSAFE_URL';
+  if(code.test(value)) return /\b(?:curl|wget|sudo|bash|powershell|echo|rm|chmod)\b/i.test(value)?'UNSAFE_SHELL':'UNSAFE_CODE';
+  if(!/[\p{L}\p{N}]/u.test(value)) return 'UNSAFE_EMPTY_TEXT';
+  if(!prose.test(value)) return 'UNSAFE_CHARACTERS';
+  return undefined;
+}
 export function isSafeDesignText(value:string):boolean {
-  return /[\p{L}\p{N}]/u.test(value) && prose.test(value) && !address.test(value) && !code.test(value) && !credentials.test(value) && !containsSecret(value);
+  return designTextViolation(value)===undefined;
 }
 function schemaField(error:ErrorObject):string {
   // Only known schema paths are included; attacker-controlled additional property names are never echoed.

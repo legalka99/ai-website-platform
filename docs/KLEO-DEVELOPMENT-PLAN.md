@@ -101,3 +101,18 @@ Implemented: Design через общий Router/guard, Business → Design → 
 Минимальная telemetry foundation сохраняет actor/org/project/workflow/agent, provider/model, доступные tokens/cached counts, timing/requestId и attempts. Workflow возвращает execution этапов; хранилища usage пока нет.
 
 **PLANNED отдельными этапами:** Client Token Quotas → Cost Accounting → Admin Console и profitability/margin analytics; клиентский AI Credits/usage % display. До реализации нужны durable event storage, invocation IDs/deduplication, привязка клиента к billing account, правила периодов/квот, версии тарифов/цен, распределение infra costs и административные роли. Подробный состав, формулы и границы — [USAGE-COST-ADMIN-PLAN](USAGE-COST-ADMIN-PLAN.md). Smoke limits 1 request / до 2000 output tokens не являются клиентским тарифным лимитом. UI, payment/subscription/invoice/pricing/quota engines не создаются этим этапом.
+
+## Real Content — текущий этап
+
+Implemented: Content contract без расширения полей, строгая validation, routed Content Agent, workflow integration и smoke infrastructure для OpenAI/Yandex. 442 offline теста проходят. Business/Design live smoke подтверждены владельцем; Content live smoke предстоит выполнить вручную. Никаких внешних API-вызовов этим этапом.
+
+Следующие этапы PLANNED: Real Developer Agent → Real QA; persistence, SEO/GEO, Client Token Quotas, Cost Accounting, Admin Console и Margin Analytics. Content usage сохраняет actor/org/project/workflow/agent/provider/model, available tokens/cached counts, timing/requestId/attempts; новый учёт цен, платежи и UI не создавались. Контракты, лимиты и команды: [CONTENT-AGENT](CONTENT-AGENT.md).
+
+
+## Постоянный Security-by-Design и public release gate
+
+Обязательный источник требований: [Security Architecture](KLEO-SECURITY-ARCHITECTURE.md). **REQUIRED BEFORE PUBLIC LAUNCH:** полный авторизованный security review/pentest и AI Red Team, remediation и Retest PASS. Любой незакрытый Critical/High блокирует публичный запуск. Medium/Low требуют оценки риска, владельца, плана и срока. Gate сейчас документирован как процесс; автоматический CI gate не реализован.
+
+Изоляция tenant обязательна для всех клиентских данных, AI context/history, credentials, usage/billing, logs, backups и artifacts. Сервер проверяет tenant/organization, project, actor permissions и ownership; client IDs не являются доказательством доступа. Least privilege обязателен для пользователей, сервисов, workers, agents, tools и integrations. Каждый tool call авторизуется отдельно.
+
+**IMPLEMENTED:** существующие локальные provider guards, validation, redaction и ограничители запросов/бюджета в пределах текущего runtime. **PLANNED:** production auth/storage/infra enforcement, durable usage/cost controls, Kleo Sentinel и Red Team tooling. Sentinel дополняет deterministic guards, без произвольных destructive/admin/billing/secret полномочий. Для будущих AI workflows обязательны детерминированные лимиты шагов, вызовов/tools, retries/fallback, времени, входа/выхода, total tokens, cost и cancellation. Текущие и недостающие ограничения перечислены в Security Architecture.

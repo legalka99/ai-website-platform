@@ -16,3 +16,4 @@ export * from './website-workflow-state.js';
 
 export * from './design-agent-input.js';
 export * from './design-direction-schema.js';
+export * from './content-plan-schema.js';

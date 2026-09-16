@@ -30,3 +30,12 @@
 Риск принимается только для локальной разработки с учебными данными. Публичный запуск требует закрытия пунктов Checklist, интеграционных тестов реальных границ и отдельного review. Foundation тесты не доказывают устойчивость к arbitrary code execution внутри сервера, сложным prompt injection, распределённым атакам или неизвестным уязвимостям dependencies.
 
 Выявлено и исправлено в этом этапе: права локального `.env` 644 → 600; отсутствие общей tenant/secret/tool/rate policy; неограниченная schema провайдера и отсутствие отдельной отмены stalled response body. Архивы проверены эвристическим scanner без выявленных совпадений. История Git целиком не сканировалась. Независимый внешний аудит не проводился.
+
+
+## Постоянный Security-by-Design и public release gate
+
+Обязательный источник требований: [Security Architecture](KLEO-SECURITY-ARCHITECTURE.md). **REQUIRED BEFORE PUBLIC LAUNCH:** полный авторизованный security review/pentest и AI Red Team, remediation и Retest PASS. Любой незакрытый Critical/High блокирует публичный запуск. Medium/Low требуют оценки риска, владельца, плана и срока. Gate сейчас документирован как процесс; автоматический CI gate не реализован.
+
+Изоляция tenant обязательна для всех клиентских данных, AI context/history, credentials, usage/billing, logs, backups и artifacts. Сервер проверяет tenant/organization, project, actor permissions и ownership; client IDs не являются доказательством доступа. Least privilege обязателен для пользователей, сервисов, workers, agents, tools и integrations. Каждый tool call авторизуется отдельно.
+
+**IMPLEMENTED:** существующие локальные provider guards, validation, redaction и ограничители запросов/бюджета в пределах текущего runtime. **PLANNED:** production auth/storage/infra enforcement, durable usage/cost controls, Kleo Sentinel и Red Team tooling. Sentinel дополняет deterministic guards, без произвольных destructive/admin/billing/secret полномочий. Для будущих AI workflows обязательны детерминированные лимиты шагов, вызовов/tools, retries/fallback, времени, входа/выхода, total tokens, cost и cancellation. Текущие и недостающие ограничения перечислены в Security Architecture.

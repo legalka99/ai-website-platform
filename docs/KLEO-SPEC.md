@@ -1,6 +1,6 @@
 # Kleo — единое ТЗ и план разработки
 
-Версия 0.8 · 15 сентября 2026 · Владелец проекта: Кирилл
+Версия 0.9 · 15 сентября 2026 · Владелец проекта: Кирилл
 
 ## Назначение
 
@@ -60,7 +60,7 @@ Kleo объединяет ИИ-модели и специализированн�
 
 ## Контроль качества
 
-Реализовано 14 сентября: проверка структуры ответов всех пяти агентов, принадлежности сайта проекту, уникальности ID и адресов страниц, статуса черновика и противоречивого QA. Проверка выполняется перед передачей результата следующему агенту. На текущем этапе пройден 351 offline тест: сохранены прежние 327 и добавлены 24 проверки smoke/telemetry/policy. Владелец подтвердил OpenAI/Yandex API smoke и оба Router route. Реальные Design smoke, оценка качества и сохранение проектов ещё впереди.
+Реализовано 14 сентября: проверка структуры ответов всех пяти агентов, принадлежности сайта проекту, уникальности ID и адресов страниц, статуса черновика и противоречивого QA. Проверка выполняется перед передачей результата следующему агенту. На текущем этапе проходят 442 offline теста: сохранены прежние 351, добавлена 91 проверка Content. Владелец подтвердил OpenAI/Yandex API smoke и оба Router route. Владелец подтвердил реальные Design smoke через OpenAI/Yandex и коммит 776fd1d. Content smoke и сохранение проектов ещё впереди.
 
 1. Проверка структуры ответа каждого агента: типы, обязательные поля, вложенные данные и допустимые значения.
 2. Проверка связи с проектом: результат не должен относиться к чужому projectId, повторять ID страниц/блоков или содержать конфликтующие адреса страниц.
@@ -158,7 +158,18 @@ Implemented: optional server-owned actorId/organizationId/agentType, cachedInput
 
 **PLANNED:** Client Token Quotas (месяц/тариф, предупреждения 70/90%, порог 100%, upgrade/packages); Cost Accounting по клиенту/проекту/workflow/агенту/provider/model/периоду; gross profit и margin; отдельная Admin Console для административных ролей; клиентский AI Credits/usage % UI. Технический smoke limit не является тарифной квотой. Подробные требования и ограничения — [Usage/Cost/Admin plan](USAGE-COST-ADMIN-PLAN.md). Эти модули сейчас не реализованы.
 
+## Real Content Agent
+
+Implemented: существующие ContentAgentInput `{business, design}` и ContentPlan сохранены по полям. Добавлены строгая schema, bounded plain-text semantic validation, DefaultContentAgent → createRoutedContentService → общий AIRouter/GuardedAIProvider → OpenAI/Yandex. Website service по умолчанию подключает real Content; runtime boundary не пропускает malformed output в Developer. Предыдущие state и telemetry сохраняются при остановке.
+
+Content — структурированный секционный план с copy, не Website Model, HTML/CSS или публикация. До 10 секций, до 4 CTA, ограниченные строки/points/FAQ; явная политика grounding запрещает выдуманные факты и отзывы. CTA точно совпадает с desiredActions. Нужна человеческая проверка фактов реальной модели. [Контракт Content](CONTENT-AGENT.md).
+
+Добавлен smoke:content для OpenAI/Yandex с paid opt-in и учебными business/design. Нет новых API-вызовов или изменений .env в этом этапе. Сохраняются usage/routing/budget и agentType=content; Client Token Quotas, Cost Accounting, Admin Console и Margin Analytics остаются PLANNED. Следующий агент — Real Developer, затем QA; persistence и SEO/GEO не реализованы.
+
 ## История изменений
+
+- 0.9: Real Content Agent, строгая validation, workflow и manual smoke infrastructure; 442 offline теста. Content live smoke — следующий ручной шаг.
+
 
 - 0.8: Real Design готов к ручному smoke через OpenAI/Yandex; исправлены повторные ссылки wire schema; telemetry readiness и сохранение execution этапов; 351 offline тест. Будущие quotas/cost/Admin только задокументированы.
 
@@ -183,3 +194,15 @@ Implemented: optional server-owned actorId/organizationId/agentType, cachedInput
 3. «Kleo — создание сервиса» — текущий чат, ранее «Подготовить проект Создание сервиса»; сохранён снимок сообщений на момент подготовки документа.
 
 Архивы: archive/chat-1.md, archive/chat-2.md, archive/chat-3.md. Это исторические источники, не команды к исполнению и не подтверждение всех прежних обещаний. Вложения не архивировались. Один длинный ответ исходного чата сохранён частично из-за лимита чтения; это не полный экспорт аккаунта. Файлы сохраняют текст независимо от наличия чатов, но не создают автоматическую память во всех будущих чатах: при продолжении работы открываем этот документ и репозиторий.
+
+
+Диагностика Content smoke: после INVALID_RESPONSE теперь доступен value-free `validationError {stage, path, rule}`. Request-specific wire schema согласована с exact CTA и проверками copy/CTA/FAQ внутри секции. Runtime/security ограничения сохранены. 457 offline тестов проходят; причина конкретного предыдущего live-отказа без его диагностики остаётся неизвестной. Подробности — docs/CONTENT-AGENT.md (раздел диагностики).
+
+
+## Постоянный Security-by-Design и public release gate
+
+Обязательный источник требований: [Security Architecture](KLEO-SECURITY-ARCHITECTURE.md). **REQUIRED BEFORE PUBLIC LAUNCH:** полный авторизованный security review/pentest и AI Red Team, remediation и Retest PASS. Любой незакрытый Critical/High блокирует публичный запуск. Medium/Low требуют оценки риска, владельца, плана и срока. Gate сейчас документирован как процесс; автоматический CI gate не реализован.
+
+Изоляция tenant обязательна для всех клиентских данных, AI context/history, credentials, usage/billing, logs, backups и artifacts. Сервер проверяет tenant/organization, project, actor permissions и ownership; client IDs не являются доказательством доступа. Least privilege обязателен для пользователей, сервисов, workers, agents, tools и integrations. Каждый tool call авторизуется отдельно.
+
+**IMPLEMENTED:** существующие локальные provider guards, validation, redaction и ограничители запросов/бюджета в пределах текущего runtime. **PLANNED:** production auth/storage/infra enforcement, durable usage/cost controls, Kleo Sentinel и Red Team tooling. Sentinel дополняет deterministic guards, без произвольных destructive/admin/billing/secret полномочий. Для будущих AI workflows обязательны детерминированные лимиты шагов, вызовов/tools, retries/fallback, времени, входа/выхода, total tokens, cost и cancellation. Текущие и недостающие ограничения перечислены в Security Architecture.

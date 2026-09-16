@@ -25,3 +25,5 @@ export * from './validation/design-direction-validator.js';
 export * from './services/guarded-router.js';
 export * from './services/routed-design-service.js';
 export * from './services/website-workflow-service.js';
+export * from './services/routed-content-service.js';
+export * from './validation/content-plan-validator.js';

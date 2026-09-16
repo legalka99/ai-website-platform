@@ -1,3 +1,4 @@
+import { validateContentPlan } from '../validation/content-plan-validator.js';
 import { validateDesignDirection } from '../validation/design-direction-validator.js';
 import type { AgentType } from '../agent.js';
 import type { ValidationIssue, ValidationResult } from './validation.js';
@@ -67,11 +68,7 @@ const rules: Record<AgentType, Rule> = {
     desiredActions: array(text, 1), competitors: optional(array(text)), notes: optional(text),
   }),
   design: (value, _path, issues) => { issues.push(...validateDesignDirection(value).issues); },
-  content: object({
-    pageTitle: text, pageGoal: text, toneOfVoice: text, keyMessages: array(text, 1),
-    sections: array(object({ type: text, purpose: text, heading: optional(text), text: optional(text), points: optional(array(text)), callToAction: optional(text) }), 1),
-    notes: optional(text),
-  }),
+  content: (value, _path, issues) => { issues.push(...validateContentPlan(value).issues); },
   developer: object({ website, generatedAt: timestamp, notes: optional(text) }),
   qa: object({
     passed: boolean, score: number(0, 100), checkedAt: timestamp, notes: optional(text),
