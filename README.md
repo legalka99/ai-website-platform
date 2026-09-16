@@ -1,6 +1,8 @@
 # Kleo
 
-**Текущий статус — Real Developer Agent:** Business, Design, Content с grounding и Developer подключены к Router. Developer формирует только canonical Website draft через строгий layout proposal и серверную сборку. Real QA, renderer/preview, storage, publishing, CMS и Sentinel остаются PLANNED. 730 offline тестов; Developer live smoke ещё не выполнялся. [Контракт, границы и ручная проверка](docs/DEVELOPER-AGENT.md). Числа и следующие шаги в датированных разделах ниже отражают прежние этапы.
+**Текущий статус — Real QA Agent:** Business → Design → grounded Content → Developer → QA реализованы через общий Router. Developer собирает canonical Website draft сервером; QA объединяет deterministic validation и bounded AI semantic review в валидированный QAReport. **890/890 offline tests PASS**. OpenAI/Yandex Developer и QA live smoke подтверждены владельцем: оба QA provider responses технически успешны, OpenAI verdict PASS, Yandex semantic verdict FAIL. Различие семантических оценок допустимо. [Контракт и границы QA](docs/QA-AGENT.md). Числа и следующие шаги в датированных разделах ниже отражают историю этапов.
+
+PLANNED: renderer/preview, persistence/storage, publishing, CMS integrations, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas, production auth/storage enforcement и Kleo Sentinel. Security Foundation не является production certification; публичный запуск требует изоляции API/storage, infrastructure hardening, security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
 
 Платформа ИИ-агентов для создания и развития сайтов. Первый сценарий — создание страниц по одной, редактирование блоков, предпросмотр и тестовый перенос в Tilda.
 
@@ -24,9 +26,9 @@
 - DefaultBusinessAgent: разрешённые входные поля → структурированный ответ → существующий runtime validator.
 - Security Foundation: общие политики доступа, секретов, URL, webhook, инструментов, файлов и лимитов; серверная граница Business Agent.
 - OpenAI и YandexProvider за единым Router с контролируемым fallback и общей защитой бюджета.
-- 294 автоматических теста; проверка TypeScript.
+- 890/890 автоматических тестов PASS; проверка TypeScript PASS.
 
-Это ядро разработки. По сообщению владельца, прежний OpenAI Business smoke и отдельный Yandex запрос из Terminal прошли. В актуальном задании владелец подтвердил реальные OpenAI/Yandex routes. Business и Design подключены к Router; реальные Design smoke через OpenAI/Yandex подтверждены владельцем. Content подключён к Router и готов к ручному smoke; Developer/QA ещё не подключены к API. База данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Workflow возвращает состояние в памяти; долговременное сохранение ещё предстоит реализовать. Проверка схемы данных не заменяет проверку фактов, дизайна и работы сайта.
+Это ядро разработки с пятью реализованными агентами. Workflow возвращает состояние в памяти; база данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Код проверяет точные структурные соответствия и security policy, AI оценивает смысл. QA PASS не доказывает истинность бизнес-фактов, визуальное качество или готовность публичного сервиса.
 
 ## Проверка проекта
 

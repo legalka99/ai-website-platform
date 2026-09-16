@@ -1,6 +1,10 @@
 # Kleo — единое ТЗ и план разработки
 
-**Актуальная контрольная точка — Real Developer Agent (16 сентября 2026):** реализован Business → Design → grounded Content → real routed Developer → текущий переданный QA. LLM возвращает только bounded layout proposal, сервер собирает canonical Website, IDs/даты и draft-only status; copy не переписывается. Input — BusinessProfile, DesignDirection, ContentPlan и optional businessFacts, projectId берётся из server context. [Полная спецификация Developer](DEVELOPER-AGENT.md). 730 offline тестов. Real QA, renderer, preview, storage, publishing/CMS, billing и Sentinel не реализованы. Ниже сохраняется история предыдущих этапов; текущий статус задаёт этот раздел.
+**Актуальная контрольная точка — Real QA Agent:** реализован Business → Design → grounded Content → Developer → QA. Developer: LLM layout proposal → server-built canonical Website draft, серверные IDs/даты и draft-only status. QA: deterministic validation + bounded AI semantic review → final validated QAReport. **890/890 offline tests PASS**. OpenAI/Yandex Developer и QA live smoke подтверждены владельцем; оба QA ответа технически валидны, OpenAI verdict PASS, Yandex semantic verdict FAIL. [Контракт QA](QA-AGENT.md). Ниже сохраняется история предыдущих этапов; текущий статус задаёт этот раздел.
+
+Код проверяет факты соответствия: exact copy/CTA, presence/order секций, grounding policy, schema/IDs/slugs, status и project/tenant scope. Provider wire принимает только QA_AI_CODES для semantic business/design/content/SEO/UX/accessibility review и recommendations; server-owned codes модели недоступны. Полный QAReport сохраняет серверные и legacy findings. Minimum severity защищена сервером; error/critical запрещают passed=true независимо от score. QA read-only и не публикует Website.
+
+Renderer/preview, persistence/storage, API/auth/tenant enforcement, publishing/CMS, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas и Sentinel остаются PLANNED. Production readiness не заявляется: нужны infrastructure hardening, architecture/security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
 
 Версия 0.9 · 15 сентября 2026 · Владелец проекта: Кирилл
 

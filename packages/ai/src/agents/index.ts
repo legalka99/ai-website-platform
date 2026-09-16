@@ -8,3 +8,5 @@ export * from './default-design-agent.js';
 export * from './default-content-agent.js';
 
 export * from './default-developer-agent.js';
+
+export * from './default-qa-agent.js';

@@ -30,3 +30,6 @@ export * from './validation/content-plan-validator.js';
 
 export * from './services/routed-developer-service.js';
 export * from './validation/developer-output-validator.js';
+
+export * from './services/routed-qa-service.js';
+export * from './validation/qa-report-validator.js';

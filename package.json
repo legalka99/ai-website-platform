@@ -20,7 +20,8 @@
     "security:scan": "node scripts/secret-scan.mjs",
     "security:check": "node scripts/security-check.mjs && npm run security:scan",
     "security:audit": "npm audit --audit-level=high",
-    "smoke:developer": "tsc --noEmit false --outDir .test-build && node scripts/smoke-developer.mjs"
+    "smoke:developer": "tsc --noEmit false --outDir .test-build && node scripts/smoke-developer.mjs",
+    "smoke:qa": "tsc --noEmit false --outDir .test-build && node scripts/smoke-qa.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

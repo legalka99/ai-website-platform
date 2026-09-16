@@ -19,3 +19,6 @@ export * from './design-direction-schema.js';
 export * from './content-plan-schema.js';
 
 export * from './developer-validation-error.js';
+
+export * from './qa-agent-input.js';
+export * from './qa-validation-error.js';

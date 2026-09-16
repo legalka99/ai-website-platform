@@ -28,5 +28,5 @@ export interface WebsiteWorkflowResult {
   /** Local per-stage telemetry; optional for backward compatibility, no persistence implied. */
   executions?: Partial<Record<import('../agent.js').AgentType, NonNullable<import('../agent.js').AgentResult['execution']>>>;
   error?: string;
-  validationError?: import('../contracts/developer-validation-error.js').DeveloperValidationError;
+  validationError?: import('../contracts/developer-validation-error.js').DeveloperValidationError | import('../contracts/qa-validation-error.js').QAValidationError;
 }

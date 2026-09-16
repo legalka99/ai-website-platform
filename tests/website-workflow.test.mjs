@@ -31,8 +31,8 @@ for (const stage of stages) for (const throws of [false, true]) {
     const result = await runner.run(task);
     const index = stages.indexOf(stage);
     assert.equal(result.success, false);
-    // Developer is an untrusted output boundary: raw agent/exception messages stay private.
-    const expected = stage === 'developer' ? `developer: ${throws ? 'Developer execution failed' : 'Developer failed'}` : `${stage}: Unavailable`;
+    // Developer and QA are untrusted output boundaries: raw agent/exception messages stay private.
+    const expected = stage === 'developer' ? `developer: ${throws ? 'Developer execution failed' : 'Developer failed'}` : stage === 'qa' ? `qa: ${throws ? 'QA execution failed' : 'QA failed'}` : `${stage}: Unavailable`;
     assert.equal(result.error, expected);
     assert.deepEqual(calls.map(c => c.type), stages.slice(0, index + 1));
     assert.deepEqual(result.state, Object.fromEntries(stages.slice(0, index).map(key => [key, outputs[key]])));

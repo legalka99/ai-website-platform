@@ -1,10 +1,14 @@
 # Kleo — модель, защита и постоянное развитие
 
-**Текущее дополнение — Real Developer Agent:** IMPLEMENTED — strict layout proposal → серверный canonical Website draft, повторная runtime/copy validation, общий Router/guards, workflow integration, безопасные diagnostics и ручной smoke. 730 offline тестов. Следующий шаг: по одному ручному OpenAI/Yandex Developer smoke и review Website Model; Real QA — отдельный будущий этап. Renderer/preview, storage, publishing, CMS, production billing и Sentinel остаются PLANNED. Public pentest / AI Red Team и Security Gate остаются обязательными, но не выполненными. [Детали этапа](DEVELOPER-AGENT.md). Предыдущие числовые результаты ниже исторические.
+**Текущий checkpoint — Real QA Agent:** Real Developer + Real QA IMPLEMENTED; полный Business → Design → grounded Content → Developer → QA pipeline. **890/890 tests PASS**, security:check failures: [], secret scan findings: [], git diff --check clean; .env ignored — последний подтверждённый статус. Владелец подтвердил OpenAI/Yandex Developer и QA live smoke: оба QA provider responses технически успешны, OpenAI semantic PASS, Yandex semantic FAIL. Детерминированные факты проверяет сервер; AI разрешён только semantic review. [Детали QA](QA-AGENT.md). Предыдущие числовые результаты и milestones ниже исторические.
+
+Next planned foundation: persistence/database, API/auth/tenant enforcement, preview/renderer/staging. Порядок и объём следующего этапа требуют отдельного выбора; реализация здесь не начинается. Далее PLANNED: publishing/integrations, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas и Learning. Долгосрочная архитектура: Research / Strategy → Website Factory → Publishing / Integrations → Growth → Analytics / Optimization → Learning. Security / Sentinel — cross-cutting; Kleo Sentinel остаётся PLANNED.
+
+Security Foundation не означает завершённую production защиту. До public launch обязательны production auth/storage isolation, infrastructure hardening, architecture/security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
 
 План 0.3 · 15 сентября 2026 · Дополнение к KLEO-SPEC.md
 
-Статус: **Partially implemented**. Обучение и эксплуатационный мониторинг остаются Planned. Реализован Security Foundation, описанный ниже; 222 offline теста включают прежние 82 и не заменяют аудит публичного сервиса.
+Статус долгосрочного плана: **Partially implemented**. Обучение и эксплуатационный мониторинг остаются Planned. Исторический этап Security Foundation, описанный ниже, включал 222 offline теста (из них прежние 82); текущий общий результат — 890/890. Тесты не заменяют аудит публичного сервиса.
 
 ## 1. Собственная фундаментальная модель
 
