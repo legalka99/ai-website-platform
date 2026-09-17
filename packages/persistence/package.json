@@ -1,0 +1,1 @@
+{"name":"@ai-platform/persistence","version":"0.1.0","private":true,"type":"module","devDependencies":{"@types/pg":"^8.23.1"},"dependencies":{"pg":"^8.23.0"}}

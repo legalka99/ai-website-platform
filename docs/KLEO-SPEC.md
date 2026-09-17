@@ -1,10 +1,14 @@
 # Kleo — единое ТЗ и план разработки
 
+**Текущий checkpoint — Persistence / Database Foundation.** AiVeron — внешний бренд, aiveron.ru — домен владельца; Kleo остаётся внутренним именем packages/imports. Organization → Project → Workflow / Website / immutable Versions / QA / Usage реализованы в отдельном PostgreSQL слое. Scoped repository проверяет memberships и ownership, составные FK защищают связи, одна транзакция фиксирует terminal workflow result. Domain models и агенты не зависят от БД. [Архитектура, tests и ограничения](PERSISTENCE-ARCHITECTURE.md). Auth/API, production isolation/storage operations и Admin Console остаются будущими этапами; production readiness не заявляется.
+
+Следующий раздел фиксирует предыдущий Real QA checkpoint; его baseline 890/890 сохранён. Текущие проверки: 901/901 ordinary tests и 35/35 реальных PostgreSQL tests, всего 936/936 PASS. Typecheck, security:check, secret scan и diff check — PASS; DB tests запускаются отдельно.
+
 **Актуальная контрольная точка — Real QA Agent:** реализован Business → Design → grounded Content → Developer → QA. Developer: LLM layout proposal → server-built canonical Website draft, серверные IDs/даты и draft-only status. QA: deterministic validation + bounded AI semantic review → final validated QAReport. **890/890 offline tests PASS**. OpenAI/Yandex Developer и QA live smoke подтверждены владельцем; оба QA ответа технически валидны, OpenAI verdict PASS, Yandex semantic verdict FAIL. [Контракт QA](QA-AGENT.md). Ниже сохраняется история предыдущих этапов; текущий статус задаёт этот раздел.
 
 Код проверяет факты соответствия: exact copy/CTA, presence/order секций, grounding policy, schema/IDs/slugs, status и project/tenant scope. Provider wire принимает только QA_AI_CODES для semantic business/design/content/SEO/UX/accessibility review и recommendations; server-owned codes модели недоступны. Полный QAReport сохраняет серверные и legacy findings. Minimum severity защищена сервером; error/critical запрещают passed=true независимо от score. QA read-only и не публикует Website.
 
-Renderer/preview, persistence/storage, API/auth/tenant enforcement, publishing/CMS, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas и Sentinel остаются PLANNED. Production readiness не заявляется: нужны infrastructure hardening, architecture/security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
+Renderer/preview, production storage operations, API/auth/tenant enforcement, publishing/CMS, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas и Sentinel остаются PLANNED. Production readiness не заявляется: нужны infrastructure hardening, architecture/security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
 
 Версия 0.9 · 15 сентября 2026 · Владелец проекта: Кирилл
 
@@ -14,7 +18,7 @@ Kleo объединяет ИИ-модели и специализированн�
 
 ## Зафиксированные договорённости
 
-- Название проекта — **Kleo**. Прежние названия AI Website Platform и «Создание сервиса» относятся к этому же проекту.
+- Внешний бренд — **AiVeron**, домен aiveron.ru; **Kleo** пока остаётся внутренним именем codebase. Прежние названия AI Website Platform и «Создание сервиса» относятся к этому же проекту. Технический rebranding — отдельная задача.
 - Начинаем с небольшой рабочей версии на Mac, затем переносим сервис на сервер.
 - Страницы создаются по одной. Клиент выбирает тип страницы, получает предложенную структуру и может изменить её до генерации.
 - Страница состоит из блоков. Изменение одного блока не должно переписывать весь сайт.

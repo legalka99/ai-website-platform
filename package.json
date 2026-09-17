@@ -21,7 +21,9 @@
     "security:check": "node scripts/security-check.mjs && npm run security:scan",
     "security:audit": "npm audit --audit-level=high",
     "smoke:developer": "tsc --noEmit false --outDir .test-build && node scripts/smoke-developer.mjs",
-    "smoke:qa": "tsc --noEmit false --outDir .test-build && node scripts/smoke-qa.mjs"
+    "smoke:qa": "tsc --noEmit false --outDir .test-build && node scripts/smoke-qa.mjs",
+    "test:persistence": "tsc --noEmit false --outDir .test-build && node scripts/test-persistence.mjs",
+    "db:migrate": "tsc --noEmit false --outDir .test-build && node scripts/persistence-db.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

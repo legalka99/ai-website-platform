@@ -1,0 +1,19 @@
+# Optional local development only; separate from isolated npm run test:persistence.
+services:
+  persistence-db:
+    image: postgres:17
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      POSTGRES_DB: kleo_dev
+      POSTGRES_USER: kleo_dev
+      POSTGRES_PASSWORD: ${KLEO_DEV_DB_PASSWORD:?Supply a local development password outside tracked files}
+    volumes:
+      - kleo-persistence-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kleo_dev -d kleo_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  kleo-persistence-data:

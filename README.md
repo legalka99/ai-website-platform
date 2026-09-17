@@ -1,8 +1,12 @@
 # Kleo
 
+**AiVeron — внешний бренд (aiveron.ru); Kleo — внутреннее имя codebase. Текущий checkpoint: Persistence / Database Foundation.** Добавлен отдельный PostgreSQL repository layer: organization/project scope, immutable Website versions, связанный QA, snapshots, execution/usage/audit и атомарное сохранение workflow. AI agents не обращаются к БД напрямую. [Архитектура и локальная проверка](docs/PERSISTENCE-ARCHITECTURE.md). Auth/API, production tenant enforcement, recovery/backups и deployment ещё не реализованы. Следующий этап — Auth + API + tenant enforcement.
+
+Проверено: **901/901 ordinary tests + 35/35 PostgreSQL tests, всего 936/936 PASS**; typecheck, security:check, secret scan и diff check — PASS. Ниже — подтверждённая предыдущая контрольная точка AI pipeline; её 890 тестов сохранены. Persistence DB tests запускаются отдельно через `npm run test:persistence`, обычный `npm test` не подключается к БД.
+
 **Текущий статус — Real QA Agent:** Business → Design → grounded Content → Developer → QA реализованы через общий Router. Developer собирает canonical Website draft сервером; QA объединяет deterministic validation и bounded AI semantic review в валидированный QAReport. **890/890 offline tests PASS**. OpenAI/Yandex Developer и QA live smoke подтверждены владельцем: оба QA provider responses технически успешны, OpenAI verdict PASS, Yandex semantic verdict FAIL. Различие семантических оценок допустимо. [Контракт и границы QA](docs/QA-AGENT.md). Числа и следующие шаги в датированных разделах ниже отражают историю этапов.
 
-PLANNED: renderer/preview, persistence/storage, publishing, CMS integrations, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas, production auth/storage enforcement и Kleo Sentinel. Security Foundation не является production certification; публичный запуск требует изоляции API/storage, infrastructure hardening, security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
+PLANNED: renderer/preview, production storage operations, publishing, CMS integrations, SEO/GEO, Analytics, CRO/Experiments, durable billing/quotas, production auth/storage enforcement и Kleo Sentinel. Security Foundation не является production certification; публичный запуск требует изоляции API/storage, infrastructure hardening, security review, black-box pentest, AI Red Team, remediation/retest и Critical/High = 0.
 
 Платформа ИИ-агентов для создания и развития сайтов. Первый сценарий — создание страниц по одной, редактирование блоков, предпросмотр и тестовый перенос в Tilda.
 
@@ -26,9 +30,9 @@ PLANNED: renderer/preview, persistence/storage, publishing, CMS integrations, SE
 - DefaultBusinessAgent: разрешённые входные поля → структурированный ответ → существующий runtime validator.
 - Security Foundation: общие политики доступа, секретов, URL, webhook, инструментов, файлов и лимитов; серверная граница Business Agent.
 - OpenAI и YandexProvider за единым Router с контролируемым fallback и общей защитой бюджета.
-- 890/890 автоматических тестов PASS; проверка TypeScript PASS.
+- 901/901 обычных тестов и отдельно 35/35 PostgreSQL tests PASS; проверка TypeScript PASS.
 
-Это ядро разработки с пятью реализованными агентами. Workflow возвращает состояние в памяти; база данных, интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Код проверяет точные структурные соответствия и security policy, AI оценивает смысл. QA PASS не доказывает истинность бизнес-фактов, визуальное качество или готовность публичного сервиса.
+Это ядро разработки с пятью реализованными агентами. Прежний workflow возвращает состояние в памяти; новая opt-in серверная обёртка сохраняет результат в PostgreSQL. Интерфейс, предпросмотр, экспорт и Tilda пока не реализованы. Код проверяет точные структурные соответствия и security policy, AI оценивает смысл. QA PASS не доказывает истинность бизнес-фактов, визуальное качество или готовность публичного сервиса.
 
 ## Проверка проекта
 
