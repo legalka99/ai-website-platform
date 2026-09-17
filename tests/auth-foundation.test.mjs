@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { hashPassword,verifyPassword,validPassword } from '../.test-build/packages/security/src/password.js';
+import { normalizeEmail,csrfToken,validCsrf,sessionHash } from '../.test-build/packages/persistence/src/auth.js';
+import { readApiConfig,validateConfig } from '../.test-build/apps/api/src/config.js';
+import { randomBytes } from 'node:crypto';
+const config={production:false,apiOrigin:'http://localhost:3001',origins:['http://localhost:3000'],sessionSeconds:3600,loginLimit:10};
+test('Argon2id random salt, verification and password bounds',async()=>{const password='TEST_ONLY_Long_Passphrase_42',a=await hashPassword(password),b=await hashPassword(password);assert.match(a,/^\$argon2id\$v=19\$/);assert.deepEqual(Object.fromEntries(a.split('$')[3].split(',').map(x=>x.split('='))),{m:'65536',t:'3',p:'1'});assert.notEqual(a,b);assert.equal(await verifyPassword(a,password),true);assert.equal(await verifyPassword(a,password+'x'),false);for(const v of ['',null,'short','a'.repeat(129),'a'.repeat(12)+'\0'])assert.equal(validPassword(v),false);});
+test('minimal email normalization does not merge dot or plus aliases',()=>{assert.equal(normalizeEmail(' Name+Tag@Example.Test '),'name+tag@example.test');assert.notEqual(normalizeEmail('a.b@example.test'),normalizeEmail('ab@example.test'));for(const value of ['a@@example.test','a\n@example.test','x','a@localhost','x'.repeat(300)])assert.throws(()=>normalizeEmail(value));});
+test('CSRF is bound to raw opaque session, independent from stored verifier',()=>{const a=randomBytes(32).toString('base64url'),b=randomBytes(32).toString('base64url');assert.equal(validCsrf(a,csrfToken(a)),true);assert.equal(validCsrf(b,csrfToken(a)),false);assert.equal(validCsrf(a,'я'.repeat(43)),false);assert.notEqual(csrfToken(a),sessionHash(a));});
+for(const change of [{production:true},{origins:['*']},{origins:[]},{origins:['https://attacker.example']},{apiOrigin:'http://localhost:3001/path'},{sessionSeconds:0},{sessionSeconds:604801},{loginLimit:100}])test('insecure or unbounded API config fails closed',()=>assert.throws(()=>validateConfig({...config,...change})));
+test('production requires HTTPS origins and never derives security mode from request headers',()=>{assert.throws(()=>readApiConfig({NODE_ENV:'production'}));const c=readApiConfig({NODE_ENV:'production',KLEO_API_ORIGIN:'https://api.example.test',KLEO_API_ALLOWED_ORIGINS:'https://example.test'});assert.equal(c.production,true);assert.equal(c.sessionSeconds,28800);});

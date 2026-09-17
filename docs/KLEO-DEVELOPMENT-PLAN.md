@@ -1,5 +1,7 @@
 # Kleo — модель, защита и постоянное развитие
 
+**Current checkpoint: AiVeron Auth / HTTP API / Tenant Enforcement Foundation.** Authentication, PostgreSQL sessions, CSRF/CORS, trusted actor context, scoped metadata API and audited platform-admin reads are implemented. [Architecture and remaining gaps](AUTH-API-ARCHITECTURE.md). Next: read-only Owner/Admin Console. RLS, distributed abuse controls, recovery/MFA/email verification, production infrastructure and security gates remain planned. The following Persistence/QA checkpoint descriptions and counts are historical, not current status.
+
 **Текущий checkpoint — AiVeron Persistence Foundation:** PostgreSQL schema/migrations, scoped repository, versioned Website + exact QA relation, transactional workflow snapshots, safe usage/audit и Docker DB tests реализованы. Kleo identifiers сохранены. [Persistence architecture](PERSISTENCE-ARCHITECTURE.md). Следующий логичный этап — **Auth + API + tenant enforcement**, без его реализации здесь. Production storage: TLS/roles, backups/restore, retention, monitoring и recovery ещё PLANNED. Бюджеты остаются прежними in-memory guards; сохранение usage не является billing engine или durable quota.
 
 Проверки Persistence checkpoint: 901/901 ordinary tests + 35/35 реальных PostgreSQL tests, всего 936/936 PASS; typecheck, security:check, secret scan и diff check — PASS. Ниже — история предыдущей Real QA контрольной точки и долгосрочный план; её baseline 890/890 сохранён.

@@ -14,14 +14,14 @@ async function complete(scope){scope??=await tenant();const run=await repo.start
 test('clean migration creates all foundation tables and repeated migration is a no-op',async()=>{
  const tables=await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='kleo'");
  for(const name of ['users','organizations','memberships','projects','workflow_runs','agent_executions','domain_snapshots','websites','website_versions','qa_reports','ai_usage','approvals','audit_events','schema_migrations'])assert.ok(tables.rows.some(r=>r.table_name===name));
- await migrate(pool,await loadMigrations());assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,'1');
+ await migrate(pool,await loadMigrations());assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,String((await loadMigrations()).length));
 });
 test('migration checksum mismatch fails safely',async()=>{
- const list=await loadMigrations();await assert.rejects(migrate(pool,[{...list[0],sql:list[0].sql+'\n-- changed'}]),e=>e.code==='MIGRATION_MISMATCH');
+ const list=await loadMigrations();await assert.rejects(migrate(pool,list.map((m,i)=>i===0?{...m,sql:m.sql+'\n-- changed'}:m)),e=>e.code==='MIGRATION_MISMATCH');
 });
 test('failed migration rolls back DDL and migration record atomically',async()=>{
- await assert.rejects(migrate(pool,[...await loadMigrations(),{name:'002_failure.sql',sql:'CREATE TABLE kleo.rollback_probe(id int); SELECT missing_function();'}]),e=>e.code==='DATABASE_FAILURE');
- assert.equal((await pool.query("SELECT to_regclass('kleo.rollback_probe') AS table")).rows[0].table,null);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,'1');
+ await assert.rejects(migrate(pool,[...await loadMigrations(),{name:'003_failure.sql',sql:'CREATE TABLE kleo.rollback_probe(id int); SELECT missing_function();'}]),e=>e.code==='DATABASE_FAILURE');
+ assert.equal((await pool.query("SELECT to_regclass('kleo.rollback_probe') AS table")).rows[0].table,null);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,String((await loadMigrations()).length));
 });
 test('completed workflow stores snapshots, immutable draft, exact QA version and audit',async()=>{
  const {scope,stored,value}=await complete(),v=await repo.getVersion(scope,stored.versionId),details=await repo.getRunDetails(scope,stored.id);

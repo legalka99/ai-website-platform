@@ -1,5 +1,7 @@
 # AiVeron Persistence / Database Foundation
 
+This document describes the preserved Persistence checkpoint. The subsequent [Auth/API foundation](AUTH-API-ARCHITECTURE.md) adds immutable migration 002, accounts, sessions, platform roles, security audit and authenticated HTTP tenant enforcement. Earlier references below to future Auth/API are historical. RLS remains deferred; runtime database access is trusted. Existing workflow repositories and migration 001 are unchanged.
+
 AiVeron — внешний бренд, aiveron.ru — зарегистрированный владельцем домен. Kleo остаётся внутренним именем codebase; packages/imports не переименованы. Домен не подключается. Этот слой не означает production readiness.
 
 ## Архитектура и границы

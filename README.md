@@ -1,5 +1,7 @@
 # Kleo
 
+**Current checkpoint: AiVeron Auth / HTTP API / Tenant Enforcement Foundation.** Email/password authentication, PostgreSQL opaque sessions, CSRF/CORS, authenticated tenant metadata routes and separate audited platform-admin reads are implemented. [Contracts, endpoints, bootstrap and limitations](docs/AUTH-API-ARCHITECTURE.md). RLS remains deferred; application enforcement does not isolate arbitrary SQL through the trusted runtime DB login. Next: read-only Owner/Admin Console. UI, public registration and production readiness are not implemented. Earlier checkpoint descriptions and counts below are historical.
+
 **AiVeron — внешний бренд (aiveron.ru); Kleo — внутреннее имя codebase. Текущий checkpoint: Persistence / Database Foundation.** Добавлен отдельный PostgreSQL repository layer: organization/project scope, immutable Website versions, связанный QA, snapshots, execution/usage/audit и атомарное сохранение workflow. AI agents не обращаются к БД напрямую. [Архитектура и локальная проверка](docs/PERSISTENCE-ARCHITECTURE.md). Auth/API, production tenant enforcement, recovery/backups и deployment ещё не реализованы. Следующий этап — Auth + API + tenant enforcement.
 
 Проверено: **901/901 ordinary tests + 35/35 PostgreSQL tests, всего 936/936 PASS**; typecheck, security:check, secret scan и diff check — PASS. Ниже — подтверждённая предыдущая контрольная точка AI pipeline; её 890 тестов сохранены. Persistence DB tests запускаются отдельно через `npm run test:persistence`, обычный `npm test` не подключается к БД.
@@ -45,7 +47,7 @@ npm test
 
 Тесты не вызывают внешние ИИ и не требуют ключей. Компиляция тестов сохраняется в `.test-build`, исключённой из Git.
 
-Команда `npm run dev` пока не запускает сервис: в apps/web и apps/api ещё нет реализаций входных файлов. Команды build/lint пока являются заготовками и не подтверждают готовность приложения.
+API запускается отдельно через `npm run api:start` с явной PostgreSQL configuration; см. [Auth/API architecture](docs/AUTH-API-ARCHITECTURE.md). Web UI отсутствует, общий `npm run dev` пока не является рабочим пользовательским приложением. Команды build/lint остаются заготовками.
 
 ## Следующий этап
 

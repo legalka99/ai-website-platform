@@ -23,7 +23,10 @@
     "smoke:developer": "tsc --noEmit false --outDir .test-build && node scripts/smoke-developer.mjs",
     "smoke:qa": "tsc --noEmit false --outDir .test-build && node scripts/smoke-qa.mjs",
     "test:persistence": "tsc --noEmit false --outDir .test-build && node scripts/test-persistence.mjs",
-    "db:migrate": "tsc --noEmit false --outDir .test-build && node scripts/persistence-db.mjs"
+    "db:migrate": "tsc --noEmit false --outDir .test-build && node scripts/persistence-db.mjs",
+    "api:start": "tsc --noEmit false --outDir .test-build && node .test-build/apps/api/src/index.js",
+    "auth:bootstrap-owner": "tsc --noEmit false --outDir .test-build && node scripts/bootstrap-owner.mjs",
+    "test:auth": "tsc --noEmit false --outDir .test-build && node scripts/test-persistence.mjs --auth"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",
