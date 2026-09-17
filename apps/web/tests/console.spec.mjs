@@ -133,13 +133,13 @@ test("login labels and browser validation prevent empty/short credentials", asyn
   const requests = await mock(page, { auth: false });
   await page.goto("/login");
   await expect(
-    page.getByRole("heading", { name: "Вход в Console" }),
+    page.getByRole("heading", { name: "Вход в панель" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Войти в Console" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   expect(requests.some((r) => r.path.endsWith("/login"))).toBe(false);
-  await page.getByLabel("Email", { exact: true }).fill("test@example.test");
+  await page.getByLabel("Электронная почта", { exact: true }).fill("test@example.test");
   await page.getByLabel("Пароль", { exact: true }).fill("short");
-  await page.getByRole("button", { name: "Войти в Console" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   expect(requests.some((r) => r.path.endsWith("/login"))).toBe(false);
 });
 test("login obtains session, redirects to shell; password/storage not persisted", async ({
@@ -147,11 +147,11 @@ test("login obtains session, redirects to shell; password/storage not persisted"
 }) => {
   await mock(page, { auth: false });
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill("owner@example.test");
+  await page.getByLabel("Электронная почта", { exact: true }).fill("owner@example.test");
   await page
     .getByLabel("Пароль", { exact: true })
     .fill("TEST_ONLY_Long_Passphrase");
-  await page.getByRole("button", { name: "Войти в Console" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   await expect(
     page.getByRole("heading", { name: "Обзор платформы" }),
   ).toBeVisible();
@@ -164,13 +164,13 @@ test("wrong credentials display generic safe error and clear inputs", async ({
 }) => {
   await mock(page, { auth: false, badLogin: true });
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill("owner@example.test");
+  await page.getByLabel("Электронная почта", { exact: true }).fill("owner@example.test");
   await page
     .getByLabel("Пароль", { exact: true })
     .fill("TEST_ONLY_Long_Passphrase");
-  await page.getByRole("button", { name: "Войти в Console" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "Проверьте email и пароль",
+    "Проверьте электронную почту и пароль",
   );
   await expect(page.getByLabel("Пароль", { exact: true })).toHaveValue("");
   await expect(page.locator("body")).not.toContainText(
@@ -235,7 +235,7 @@ test("dashboard loading then real supplied counts and recent records", async ({
   await mock(page, { delay: 600 });
   await page.goto("/admin");
   await expect(page.getByRole("status")).toContainText("Загрузка");
-  await expect(page.locator(".metrics")).toContainText("146");
+  await expect(page.locator(".metrics").first()).toContainText("146");
   await expect(
     page.getByRole("heading", { name: "Последние проверки QA" }),
   ).toBeVisible();
@@ -248,12 +248,12 @@ for (const [path, title] of [
   ["organizations", "Организации"],
   ["users", "Пользователи"],
   ["projects", "Проекты"],
-  ["workflows", "Workflows"],
-  ["websites", "Websites"],
+  ["workflows", "Процессы"],
+  ["websites", "Сайты"],
   ["versions", "Версии сайтов"],
   ["qa", "Контроль качества"],
-  ["usage", "AI Usage"],
-  ["audit", "Audit"],
+  ["usage", "Использование ИИ"],
+  ["audit", "Аудит"],
 ])
   test(`${path} table renders bounded records`, async ({ page }) => {
     await mock(page);
@@ -327,7 +327,7 @@ test("usage null is unavailable; cost is planned", async ({ page }) => {
   await mock(page);
   await page.goto("/admin/usage");
   await expect(page.locator("tbody")).toContainText("Недоступно");
-  await expect(page.locator("main")).toContainText("Стоимость: planned");
+  await expect(page.locator("main")).toContainText("Денежный учёт ещё не подключён");
 });
 test("QA text, severity counts and recommendation can be inspected", async ({
   page,
@@ -348,7 +348,7 @@ test("QA text, severity counts and recommendation can be inspected", async ({
   await page.goto("/admin/qa");
   await page.locator("summary").click();
   await expect(page.locator("tbody")).toContainText("FAIL");
-  await expect(page.locator(".qa-issues")).toContainText("error: 1");
+  await expect(page.locator(".qa-issues")).toContainText("Ошибка: 1");
   await expect(page.locator(".qa-issues")).toContainText("Review audience.");
 });
 test("project detail links preserve explicit project scope", async ({
@@ -359,7 +359,7 @@ test("project detail links preserve explicit project scope", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Связанные данные" })
-      .getByRole("link", { name: "AI Usage →" }),
+      .getByRole("link", { name: "Использование ИИ →" }),
   ).toHaveAttribute("href", "/admin/usage?projectId=" + id);
 });
 test("workflow detail shows only persisted execution timeline", async ({
@@ -367,13 +367,13 @@ test("workflow detail shows only persisted execution timeline", async ({
 }) => {
   await mock(page);
   await page.goto("/admin/workflows/" + id);
-  await expect(page.locator(".timeline")).toContainText("business");
+  await expect(page.locator(".timeline")).toContainText("Анализ бизнеса");
   await expect(page.locator(".timeline li")).toHaveCount(1);
 });
 test("system liveness does not pretend DB readiness", async ({ page }) => {
   await mock(page);
   await page.goto("/admin/system");
-  await expect(page.locator("main")).toContainText("Online");
+  await expect(page.locator("main")).toContainText("Доступен");
   await expect(page.locator("main")).toContainText(
     "Отдельная проверка не предоставлена",
   );
@@ -384,7 +384,7 @@ test("tablet layout and keyboard navigation remain usable", async ({
   await page.setViewportSize({ width: 768, height: 1000 });
   await mock(page);
   await page.goto("/admin");
-  await expect(page.locator(".metrics")).toBeVisible();
+  await expect(page.locator(".metrics").first()).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -416,7 +416,7 @@ test("official branding and favicon assets load on dark login", async ({ page })
   await expect(logo).toBeVisible();
   await expect(logo).toHaveAttribute("src", "/brand/aiveron-logo.svg");
   expect(await logo.evaluate(img => img.complete && img.naturalWidth === 576)).toBe(true);
-  await expect(page).toHaveTitle("AiVeron Console");
+  await expect(page).toHaveTitle("AiVeron — Панель владельца");
   expect(await page.locator("html").evaluate(el => getComputedStyle(el).colorScheme)).toBe("dark");
   expect(await page.locator('meta[name="theme-color"]').getAttribute("content")).toBe(
     await page.locator("html").evaluate(el => getComputedStyle(el).getPropertyValue("--canvas").trim())
@@ -427,14 +427,14 @@ test("official branding and favicon assets load on dark login", async ({ page })
     expect(r.headers()["content-type"]).toMatch(/image/);
     expect((await r.body()).length).toBeGreaterThan(100);
   }
-  await page.getByLabel("Email", { exact: true }).focus();
-  expect(await page.getByLabel("Email", { exact: true }).evaluate(el => getComputedStyle(el).outlineStyle)).toBe("solid");
+  await page.getByLabel("Электронная почта", { exact: true }).focus();
+  expect(await page.getByLabel("Электронная почта", { exact: true }).evaluate(el => getComputedStyle(el).outlineStyle)).toBe("solid");
 });
 
 test("shell reuses official logo without clipping at laptop and narrow widths", async ({ page }) => {
   await mock(page);
   await page.goto("/admin");
-  await expect(page.locator(".metrics")).toBeVisible();
+  await expect(page.locator(".metrics").first()).toBeVisible();
   for (const width of [1440, 1024, 768, 500]) {
     await page.setViewportSize({ width, height: 900 });
     const logo = page.locator(".sidebar .brand-logo");
@@ -464,4 +464,84 @@ test("dark tokens keep normal text and status labels above WCAG AA contrast", as
     return pairs.map(([fg, bg]) => { const a = luminance(fg), b = luminance(bg); return { fg, bg, ratio: (Math.max(a,b) + .05)/(Math.min(a,b) + .05) }; });
   });
   for (const pair of contrasts) expect(pair.ratio, `${pair.fg} on ${pair.bg}`).toBeGreaterThanOrEqual(4.5);
+});
+
+test("Russian navigation and read-only label below the unchanged logo", async ({ page }) => {
+  await mock(page);
+  await page.goto("/admin");
+  await expect(page.locator(".sidebar-mode")).toHaveText("Только просмотр");
+  expect(await page.locator(".sidebar-mode").evaluate(el => {
+    const logo = document.querySelector(".sidebar .brand-logo");
+    return el.previousElementSibling?.classList.contains("brand") && el.getBoundingClientRect().top >= logo.getBoundingClientRect().bottom;
+  })).toBe(true);
+  expect(await page.locator(".sidebar .brand-logo").evaluate(el => ({ width: getComputedStyle(el).width, height: el.getAttribute("height"), src: el.getAttribute("src") }))).toEqual({ width: "184px", height: "212", src: "/brand/aiveron-logo.svg" });
+  await expect(page.locator(".topbar")).toContainText("Владелец платформы");
+  await expect(page.locator(".sidebar nav a")).toHaveText(["01Обзор", "02Организации", "03Пользователи", "04Проекты", "05Процессы", "06Сайты", "07QA", "08Использование ИИ", "09Финансы", "10Аудит", "11Система"]);
+  await expect(page.getByRole("region", { name: "Финансовые показатели" })).toContainText("Недоступно");
+  await page.getByRole("navigation", { name: "Основная навигация" }).getByRole("link", { name: "Финансы" }).click();
+  await expect(page).toHaveURL(/\/admin\/finance$/);
+});
+for (const role of ["platform_owner", "platform_admin"])
+  test(`finance uses existing bounded admin usage for ${role}`, async ({ page }) => {
+    const requests = await mock(page, { role });
+    await page.goto("/admin/finance");
+    await expect(page.getByRole("heading", { name: "Финансы", exact: true })).toBeVisible();
+    await expect(page.locator("tbody tr")).toHaveCount(1);
+    expect(requests.some(r => r.path === "/api/v1/admin/usage")).toBe(true);
+    expect(requests.some(r => r.path.includes("/finance"))).toBe(false);
+    await expect(page.locator(".finance-summary strong")).toHaveText(Array(4).fill("Недоступно"));
+    await expect(page.locator("main")).not.toContainText(/0\s*[₽$%]/);
+  });
+for (const options of [{ role: "user" }, { auth: false }])
+  test(`finance denied without platform access ${JSON.stringify(options)}`, async ({ page }) => {
+    const requests = await mock(page, options);
+    await page.goto("/admin/finance");
+    await expect(page.getByRole("heading", { name: options.auth === false ? "Вход в панель" : "Доступ запрещён" })).toBeVisible();
+    expect(requests.some(r => r.path.includes("/admin/"))).toBe(false);
+  });
+test("finance tabs preserve bounded paging and do not invent organization/project money", async ({ page }) => {
+  await mock(page, { pagination: true });
+  await page.goto("/admin/finance");
+  await expect(page.locator("tbody tr")).toHaveCount(20);
+  await page.getByRole("button", { name: "Далее", exact: true }).click();
+  await expect(page).toHaveURL(/offset=20/);
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  for (const label of ["По организациям", "По проектам"]) {
+    await page.getByRole("link", { name: label, exact: true }).click();
+    await expect(page.locator("tbody tr")).toHaveCount(20);
+    await expect(page.getByRole("button", { name: "Назад", exact: true })).toBeDisabled();
+    await expect(page.locator("tbody tr").first()).toContainText("Недоступно");
+    await expect(page.locator("tbody tr").first().locator("td").last()).toHaveText("Недоступно");
+  }
+});
+test("finance preserves unknown tokens, zero and exact large integers", async ({ page }) => {
+  await mock(page, { row: { input_tokens: null, output_tokens: "1245800", total_tokens: "9007199254740993", cached_input_tokens: "0" } });
+  await page.goto("/admin/finance");
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  const cells = page.locator("tbody tr td");
+  await expect(cells.nth(4)).toHaveText("Недоступно");
+  await expect(cells.nth(5)).toHaveText(new Intl.NumberFormat("ru-RU").format(1245800));
+  await expect(cells.nth(6)).toHaveText("0");
+  await expect(cells.nth(7)).toHaveText(new Intl.NumberFormat("ru-RU").format(9007199254740993n));
+});
+test("finance empty telemetry stays explicit", async ({ page }) => {
+  await mock(page, { empty: true });
+  await page.goto("/admin/finance");
+  await expect(page.getByRole("heading", { name: "Нет данных об использовании ИИ" })).toBeVisible();
+  await expect(page.locator(".finance-summary strong")).toHaveText(Array(4).fill("Недоступно"));
+});
+test("finance error uses safe Russian diagnostics", async ({ page }) => {
+  await mock(page, { status: 503 });
+  await page.goto("/admin/finance");
+  await expect(page.getByRole("alert")).toContainText("Не удалось загрузить данные");
+  await expect(page.locator("body")).not.toContainText("PRIVATE_UNTRUSTED_MESSAGE");
+});
+test("key page headings and controls have no English UI leftovers", async ({ page }) => {
+  await mock(page);
+  for (const path of ["", "organizations", "users", "projects", "workflows", "websites", "qa", "usage", "finance", "audit", "system"]) {
+    await page.goto("/admin/" + path);
+    await expect(page.locator("main h1")).toBeVisible();
+    const chrome = await page.locator("h1,h2,th,button,label,.sidebar,.topbar,.footer,.page-header,.finance-note,.metadata dt").allTextContents();
+    expect(chrome.join(" ")).not.toMatch(/\b(?:Console|Dashboard|Workflows?|Websites?|Usage|Audit|System|Finance|Provider|Model|Agent|Input|Output|Cached|Score|Actor|Attempt|Planned|Read-only|Owner|WORKSPACE|PLATFORM)\b/);
+  }
 });

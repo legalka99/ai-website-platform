@@ -17,17 +17,17 @@ test("real local browser → HTTP → restricted PostgreSQL: owner navigation/lo
   await expect(page.getByRole("img", { name: "AiVeron", exact: true })).toBeVisible();
   await page.screenshot({ path: "/tmp/kleo-console-login.png", fullPage: true });
   async function login(email) {
-    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Электронная почта", { exact: true }).fill(email);
     await page
       .getByLabel("Пароль", { exact: true })
       .fill("TEST_ONLY_Local_Console_42");
-    await page.getByRole("button", { name: "Войти в Console" }).click();
+    await page.getByRole("button", { name: "Войти" }).click();
   }
   await login("owner@example.test");
   await expect(
     page.getByRole("heading", { name: "Обзор платформы" }),
   ).toBeVisible();
-  await expect(page.locator(".metrics")).toContainText("1");
+  await expect(page.locator(".metrics").first()).toContainText("1");
   const cookie = (await context.cookies("http://localhost:3001")).find(
     (c) => c.name === "kleo_session",
   );
@@ -38,11 +38,12 @@ test("real local browser → HTTP → restricted PostgreSQL: owner navigation/lo
     ["organizations", "Организации"],
     ["users", "Пользователи"],
     ["projects", "Проекты"],
-    ["workflows", "Workflows"],
-    ["websites", "Websites"],
+    ["workflows", "Процессы"],
+    ["websites", "Сайты"],
     ["qa", "Контроль качества"],
-    ["usage", "AI Usage"],
-    ["audit", "Audit"],
+    ["usage", "Использование ИИ"],
+    ["finance", "Финансы"],
+    ["audit", "Аудит"],
   ]) {
     await page.goto("/admin/" + path);
     await expect(
@@ -63,12 +64,12 @@ test("real local browser → HTTP → restricted PostgreSQL: owner navigation/lo
   await expect(
     page.getByRole("heading", { name: "Этапы выполнения" }),
   ).toBeVisible();
-  await expect(page.locator(".timeline")).toContainText("qa");
+  await expect(page.locator(".timeline")).toContainText("QA");
   await page.goto("/admin/system");
-  await expect(page.locator("main")).toContainText("Online");
+  await expect(page.locator("main")).toContainText("Доступен");
   await page.screenshot({ path: "/tmp/kleo-console-system.png", fullPage: true });
   await page.goto("/admin");
-  await expect(page.locator(".metrics")).toBeVisible();
+  await expect(page.locator(".metrics").first()).toBeVisible();
   await page.screenshot({
     path: "/tmp/kleo-console-local-smoke.png",
     fullPage: true,

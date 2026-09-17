@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { titles, humanLabel, numberLabel } from "./labels.js";
 import { api, ApiError } from "./api.js";
 import type {
   AdminKind,
@@ -64,7 +65,7 @@ export function ErrorState({
   );
 }
 export function Header({
-  eyebrow = "PLATFORM OVERVIEW",
+  eyebrow = "ПАНЕЛЬ УПРАВЛЕНИЯ",
   title,
   description,
   action,
@@ -89,9 +90,9 @@ export function Badge({ value }: { value: unknown }) {
   const text = String(value ?? "unavailable");
   return (
     <span
-      className={`badge ${["active", "completed", "PASS", "success"].includes(text) ? "good" : ["FAIL", "failed", "critical", "error", "disabled"].includes(text) ? "bad" : ["warning", "running", "qa_failed"].includes(text) ? "warn" : ""}`}
+      className={`badge ${["active", "completed", "PASS", "success"].includes(text) ? "good" : ["FAIL", "failure", "failed", "critical", "error", "disabled"].includes(text) ? "bad" : ["warning", "running", "qa_failed"].includes(text) ? "warn" : ""}`}
     >
-      {text}
+      {humanLabel(text)}
     </span>
   );
 }
@@ -117,42 +118,44 @@ export function display(value: unknown, key = ""): ReactNode {
   if (["status", "outcome", "severity", "role"].includes(key))
     return <Badge value={value} />;
   if (key === "passed") return <Badge value={value ? "PASS" : "FAIL"} />;
+  if (["agent_type", "event_type", "resource_type"].includes(key)) return humanLabel(value);
+  if (key.endsWith("_tokens") || ["score", "version_number", "attempt", "duration_ms"].includes(key)) return numberLabel(value);
   return String(value);
 }
 const labels: Record<string, string> = {
   id: "ID",
   name: "Название",
-  email: "Email",
+  email: "Электронная почта",
   status: "Статус",
   role: "Роль платформы",
   organization_id: "Организация",
   project_id: "Проект",
-  website_id: "Website",
+  website_id: "Сайт",
   website_version_id: "Версия",
-  workflow_run_id: "Workflow",
+  workflow_run_id: "Процесс",
   created_at: "Создано",
   updated_at: "Обновлено",
   started_at: "Начало",
   completed_at: "Завершение",
   recorded_at: "Время",
   passed: "QA",
-  score: "Score",
+  score: "Оценка",
   version_number: "Версия",
-  provider: "Provider",
-  model: "Model",
-  agent_type: "Agent",
+  provider: "Провайдер",
+  model: "Модель",
+  agent_type: "Агент",
   outcome: "Результат",
-  input_tokens: "Input",
-  output_tokens: "Output",
-  cached_input_tokens: "Cached",
-  total_tokens: "Total tokens",
-  duration_ms: "Время, ms",
+  input_tokens: "Входные токены",
+  output_tokens: "Выходные токены",
+  cached_input_tokens: "Кэшированные токены",
+  total_tokens: "Всего токенов",
+  duration_ms: "Время, мс",
   event_type: "Событие",
-  actor_id: "Actor",
+  actor_id: "Инициатор",
   resource_type: "Ресурс",
-  resource_id: "Resource ID",
-  request_id: "Request ID",
-  attempt: "Attempt",
+  resource_id: "ID ресурса",
+  request_id: "ID запроса",
+  attempt: "Попытка",
 };
 const columns: Record<AdminKind, readonly (keyof AdminRow)[]> = {
   organizations: ["name", "id", "status", "created_at"],
@@ -188,6 +191,7 @@ const columns: Record<AdminKind, readonly (keyof AdminRow)[]> = {
     "duration_ms",
     "recorded_at",
     "project_id",
+    "organization_id",
     "workflow_run_id",
   ],
   "audit-events": [
@@ -210,22 +214,24 @@ export function DataTable({
   kind,
   rows,
   caption,
+  finance = false,
 }: {
   kind: AdminKind;
   rows: AdminRow[];
   caption?: string;
+  finance?: boolean;
 }) {
   if (!rows.length)
     return (
       <div className="state empty">
-        <h2>Пока нет записей</h2>
+        <h2>{finance && kind === "usage" ? "Нет данных об использовании ИИ" : "Пока нет записей"}</h2>
         <p>Здесь появятся сохранённые данные платформы.</p>
       </div>
     );
   return (
-    <div className="table-scroll" tabIndex={0} aria-label={caption ?? kind}>
+    <div className="table-scroll" tabIndex={0} aria-label={caption ?? titles[kind]}>
       <table>
-        <caption className="sr-only">{caption ?? kind}</caption>
+        <caption className="sr-only">{caption ?? titles[kind]}</caption>
         <thead>
           <tr>
             {columns[kind].map((k) => (
@@ -233,6 +239,7 @@ export function DataTable({
                 {labels[k]}
               </th>
             ))}
+            {finance && kind !== "usage" && ["Доход", "Расходы", "Прибыль", "Маржинальность"].map(label => <th key={label} scope="col">{label}</th>)}
             {kind === "qa" && <th scope="col">Замечания</th>}
             {kind === "versions" && <th scope="col">Проверка качества</th>}
           </tr>
@@ -262,6 +269,7 @@ export function DataTable({
                   )}
                 </td>
               ))}
+              {finance && kind !== "usage" && [0, 1, 2, 3].map(i => <td key={`money-${i}`}><span className="muted">Недоступно</span></td>)}
               {kind === "qa" && (
                 <td>
                   <QAInfo row={row} />
@@ -298,13 +306,13 @@ function QAInfo({ row }: { row: AdminRow }) {
           <Link
             to={`/admin/workflows/${encodeURIComponent(row.workflow_run_id)}`}
           >
-            Исходный workflow →
+            Исходный процесс →
           </Link>
         )}
         <p>
           {(["critical", "error", "warning", "info"] as const)
             .map(
-              (s) => `${s}: ${issues.filter((i) => i.severity === s).length}`,
+              (s) => `${humanLabel(s)}: ${issues.filter((i) => i.severity === s).length}`,
             )
             .join(" · ")}
         </p>

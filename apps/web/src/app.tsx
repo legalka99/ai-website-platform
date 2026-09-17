@@ -16,6 +16,8 @@ import type {
   AdminList,
   SessionView,
 } from "../../../packages/core/src/admin-api.js";
+import { titles, humanLabel, numberLabel } from "./labels.js";
+import { Finance, FinanceOverview } from "./finance.js";
 import { BrandLogo } from "./brand.js";
 import { api, ApiError } from "./api.js";
 import {
@@ -34,24 +36,14 @@ const sections: [string, string][] = [
   ["organizations", "Организации"],
   ["users", "Пользователи"],
   ["projects", "Проекты"],
-  ["workflows", "Workflows"],
-  ["websites", "Websites"],
+  ["workflows", "Процессы"],
+  ["websites", "Сайты"],
   ["qa", "QA"],
-  ["usage", "AI Usage"],
-  ["audit", "Audit"],
+  ["usage", "Использование ИИ"],
+  ["finance", "Финансы"],
+  ["audit", "Аудит"],
   ["system", "Система"],
 ];
-const titles: Record<AdminKind, string> = {
-  organizations: "Организации",
-  users: "Пользователи",
-  projects: "Проекты",
-  workflows: "Workflows",
-  websites: "Websites",
-  versions: "Версии сайтов",
-  qa: "Контроль качества",
-  usage: "AI Usage",
-  "audit-events": "Audit",
-};
 function Brand() {
   return (
     <Link className="brand" to="/admin" aria-label="AiVeron — обзор">
@@ -93,7 +85,7 @@ export function App() {
     };
   }, [reload]);
   useEffect(() => {
-    document.title = "AiVeron Console";
+    document.title = "AiVeron — Панель владельца";
     document.querySelector<HTMLElement>("h1")?.focus();
   }, [location.pathname]);
   const logout = async () => {
@@ -145,7 +137,7 @@ export function App() {
         <Brand />
         <Header
           title="Доступ запрещён"
-          description="Console доступна только владельцу и администраторам платформы."
+          description="Панель доступна только владельцу и администраторам платформы."
         />
         <p>Роль организации не предоставляет доступ к управлению AiVeron.</p>
         {logoutError && <ErrorState error={logoutError} />}
@@ -161,7 +153,8 @@ export function App() {
       </a>
       <aside className="sidebar">
         <Brand />
-        <p className="nav-label">WORKSPACE</p>
+        <p className="sidebar-mode">Только просмотр</p>
+        <p className="nav-label">НАВИГАЦИЯ</p>
         <nav aria-label="Основная навигация">
           {sections.map(([path, label], i) => (
             <NavLink
@@ -176,19 +169,10 @@ export function App() {
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-note">
-          <span className="live-dot" />
-          Read-only console
-          <p>
-            Наблюдение за платформой.
-            <br />
-            Изменение данных недоступно.
-          </p>
-        </div>
       </aside>
       <div className="workspace">
         <header className="topbar">
-          <span className="topbar-label">Platform administration</span>
+          <span className="topbar-label">Управление платформой</span>
           <div className="account">
             <span className="account-email">{user.email}</span>
             <Badge value={user.platformRole} />
@@ -205,6 +189,7 @@ export function App() {
           {logoutError && <ErrorState error={logoutError} />}
           <Routes>
             <Route path="/admin" element={<Dashboard />} />
+            <Route path="/admin/finance" element={<Finance />} />
             {(
               [
                 "organizations",
@@ -257,8 +242,8 @@ export function App() {
           </Routes>
         </main>
         <footer className="footer">
-          AiVeron · Owner / Admin Console{" "}
-          <span>Время: {timezone} · Только чтение</span>
+          AiVeron · Панель владельца{" "}
+          <span>Время: {timezone} · Только просмотр</span>
         </footer>
       </div>
     </div>
@@ -281,7 +266,7 @@ function Login({ onLogin }: { onLogin: (user: SessionView["user"]) => void }) {
     } catch (e) {
       setError(
         e instanceof ApiError && e.status === 401
-          ? "Не удалось войти. Проверьте email и пароль."
+          ? "Не удалось войти. Проверьте электронную почту и пароль."
           : e instanceof ApiError
             ? e.message
             : "Сервис недоступен. Повторите позже.",
@@ -295,11 +280,11 @@ function Login({ onLogin }: { onLogin: (user: SessionView["user"]) => void }) {
       <section className="login-panel">
         <div className="login-card">
           <Brand />
-          <span className="overline">OWNER CONSOLE</span>
-          <h1>Вход в Console</h1>
+          <span className="overline">ПАНЕЛЬ ВЛАДЕЛЬЦА</span>
+          <h1>Вход в панель</h1>
           <p>Для владельца и администраторов AiVeron.</p>
           <form onSubmit={(e) => void submit(e)}>
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Электронная почта</label>
             <input
               id="email"
               name="email"
@@ -326,7 +311,7 @@ function Login({ onLogin }: { onLogin: (user: SessionView["user"]) => void }) {
               </p>
             )}
             <button className="primary" disabled={busy} type="submit">
-              {busy ? "Вход…" : "Войти в Console"}
+              {busy ? "Вход…" : "Войти"}
               <span aria-hidden="true">→</span>
             </button>
           </form>
@@ -344,8 +329,8 @@ function Dashboard() {
     <>
       <Header
         title="Обзор платформы"
-        description="Сохранённое состояние AiVeron — от организации до результата AI."
-        action={<span className="read-only">READ ONLY</span>}
+        description="Сохранённое состояние AiVeron — от организации до результата ИИ."
+        action={<span className="read-only">Только просмотр</span>}
       />
       {r.error ? (
         <ErrorState error={r.error} retry={r.retry} />
@@ -358,7 +343,7 @@ function Dashboard() {
               (kind, i) => (
                 <Link className="metric" to={`/admin/${kind}`} key={kind}>
                   <span>{titles[kind]}</span>
-                  <strong>{r.data!.counts[kind]}</strong>
+                  <strong>{numberLabel(r.data!.counts[kind])}</strong>
                   <small>
                     Всего в платформе <span aria-hidden="true">→</span>
                   </small>
@@ -367,10 +352,11 @@ function Dashboard() {
               ),
             )}
           </div>
+          <FinanceOverview linked />
           <section className="panel">
             <div className="panel-title">
-              <h2>Последние workflows</h2>
-              <Link to="/admin/workflows">Все workflows →</Link>
+              <h2>Последние процессы</h2>
+              <Link to="/admin/workflows">Все процессы →</Link>
             </div>
             <DataTable kind="workflows" rows={r.data.workflows} />
           </section>
@@ -384,7 +370,7 @@ function Dashboard() {
           <section className="panel">
             <div className="panel-title">
               <h2>Последние события доступа</h2>
-              <Link to="/admin/audit">Audit →</Link>
+              <Link to="/admin/audit">Аудит →</Link>
             </div>
             <DataTable kind="audit-events" rows={r.data.audit} />
           </section>
@@ -413,10 +399,10 @@ function ListPage({ kind }: { kind: AdminKind }) {
         title={titles[kind]}
         description={
           kind === "usage"
-            ? "Сохранённые обращения к AI. Недоступные token counts не заменяются нулём. Стоимость: planned."
+            ? "Сохранённые попытки обращений к ИИ. Неизвестное число токенов не заменяется нулём. Денежный учёт ещё не подключён."
             : kind === "audit-events"
-              ? "События authentication и административного доступа. Это Audit, не Sentinel."
-              : "Серверная сортировка · до 20 записей на странице · только чтение."
+              ? "События входа и административного доступа. Журнал аудита не заменяет мониторинг безопасности."
+              : "Серверная сортировка · до 20 записей на странице · только просмотр."
         }
       />
       {params.size > 0 && (
@@ -476,11 +462,11 @@ function DetailPage({
         ← {titles[kind]}
       </Link>
       <Header
-        eyebrow="RECORD DETAILS"
+        eyebrow="СВЕДЕНИЯ О ЗАПИСИ"
         title={
           r.data?.item.name ??
           (kind === "workflows"
-            ? "Workflow"
+            ? "Процесс"
             : kind === "users"
               ? "Пользователь"
               : "Подробности")
@@ -503,7 +489,7 @@ function DetailPage({
                   Проекты организации →
                 </Link>
                 <Link to={`/admin/workflows?organizationId=${id}`}>
-                  Workflows организации →
+                  Процессы организации →
                 </Link>
               </>
             )}
@@ -528,7 +514,7 @@ function DetailPage({
                 <Link to={`/admin/projects/${r.data.item.project_id}`}>
                   Проект →
                 </Link>
-                <Link to={`/admin/usage?workflowId=${id}`}>AI Usage →</Link>
+                <Link to={`/admin/usage?workflowId=${id}`}>Использование ИИ →</Link>
                 <Link to={`/admin/qa?workflowId=${id}`}>QA →</Link>
               </>
             )}
@@ -537,13 +523,13 @@ function DetailPage({
             <section className="panel">
               <div className="panel-title">
                 <h2>Этапы выполнения</h2>
-                <span>Только сохранённые executions</span>
+                <span>Только сохранённые выполнения</span>
               </div>
               {r.data.executions.length ? (
                 <ol className="timeline">
                   {r.data.executions.map((e) => (
                     <li key={e.id}>
-                      <strong>{e.agent_type}</strong>
+                      <strong>{humanLabel(e.agent_type)}</strong>
                       <Badge value={e.status} />
                     </li>
                   ))}
@@ -564,7 +550,7 @@ function System({ role }: { role: string }) {
     <>
       <Header
         title="Состояние системы"
-        description="Доступность API и текущий доступ. Проверка не запускает AI."
+        description="Доступность API и текущий доступ. Проверка не запускает ИИ."
       />
       <section className="panel system-panel">
         <h2>HTTP API</h2>
@@ -578,19 +564,19 @@ function System({ role }: { role: string }) {
         <dl className="metadata">
           <div>
             <dt>Текущая роль</dt>
-            <dd>{role}</dd>
+            <dd>{humanLabel(role)}</dd>
           </div>
           <div>
-            <dt>Режим Console</dt>
-            <dd>Read-only</dd>
+            <dt>Режим панели</dt>
+            <dd>Только просмотр</dd>
           </div>
           <div>
-            <dt>DB readiness</dt>
+            <dt>Готовность базы данных</dt>
             <dd>Отдельная проверка не предоставлена</dd>
           </div>
           <div>
-            <dt>Денежная стоимость AI</dt>
-            <dd>Planned</dd>
+            <dt>Денежная стоимость ИИ</dt>
+            <dd>Учёт ещё не подключён</dd>
           </div>
         </dl>
       </section>

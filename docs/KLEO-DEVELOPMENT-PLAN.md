@@ -1,5 +1,7 @@
 # Kleo — модель, защита и постоянное развитие
 
+Актуализация Owner Console: русский интерфейс и раздел «Финансы» (`/admin/finance`) с сохранённой телеметрией ИИ; денежный учёт пока не подключён. Размер и assets логотипа сохранены. Подробности: [ADMIN-CONSOLE](ADMIN-CONSOLE.md).
+
 **Current checkpoint: AiVeron Owner/Admin Console v1 implemented.** Read-only operational UI and required audited admin read APIs are available; [scope, verification and limitations](ADMIN-CONSOLE.md). Next proposed stage: administrator MFA/recovery/session management before public exposure. RLS, distributed rate limiting, infrastructure hardening and production security gates remain open. No other module was started; following checkpoint statements are historical.
 
 **Current checkpoint: AiVeron Auth / HTTP API / Tenant Enforcement Foundation.** Authentication, PostgreSQL sessions, CSRF/CORS, trusted actor context, scoped metadata API and audited platform-admin reads are implemented. [Architecture and remaining gaps](AUTH-API-ARCHITECTURE.md). Next: read-only Owner/Admin Console. RLS, distributed abuse controls, recovery/MFA/email verification, production infrastructure and security gates remain planned. The following Persistence/QA checkpoint descriptions and counts are historical, not current status.

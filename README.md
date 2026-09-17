@@ -1,5 +1,7 @@
 # Kleo
 
+Актуализация Owner Console: русский интерфейс и раздел «Финансы» (`/admin/finance`) с сохранённой телеметрией ИИ; денежный учёт пока не подключён. Размер и assets логотипа сохранены. Подробности: [ADMIN-CONSOLE](docs/ADMIN-CONSOLE.md).
+
 **Current checkpoint: AiVeron Owner/Admin Console v1.** Read-only React/TypeScript interface for platform_owner/platform_admin: overview, organizations, users, projects, workflows/executions, Websites/versions, validated QA, persisted AI usage, security audit and API liveness. Existing cookie auth/CSRF and explicit audited admin authorization remain the boundary. [Console routes, local commands, tests and limitations](docs/ADMIN-CONSOLE.md). Start API with `npm run api:start`, UI with `npm run web:dev`; production bundle: `npm run web:build`. No deployment or production-readiness claim. Earlier checkpoint descriptions below are historical.
 
 **Current checkpoint: AiVeron Auth / HTTP API / Tenant Enforcement Foundation.** Email/password authentication, PostgreSQL opaque sessions, CSRF/CORS, authenticated tenant metadata routes and separate audited platform-admin reads are implemented. [Contracts, endpoints, bootstrap and limitations](docs/AUTH-API-ARCHITECTURE.md). RLS remains deferred; application enforcement does not isolate arbitrary SQL through the trusted runtime DB login. Next: read-only Owner/Admin Console. UI, public registration and production readiness are not implemented. Earlier checkpoint descriptions and counts below are historical.

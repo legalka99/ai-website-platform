@@ -185,3 +185,33 @@ Branding-only file delta over the pre-existing uncommitted Console:
 - Updated: `apps/web/index.html`; `apps/web/src/{app.tsx,main.tsx,style.css,tokens.css}`; `apps/web/tests/{console.spec.mjs,local-smoke.spec.mjs}`; `scripts/{check-web-build.mjs,test-console-docker.mjs}`; this document.
 - Deleted: none. Dependencies added: none. Earlier uncommitted API/Auth/Console work remains intact, based on `efb1bd6`.
 - Visual review: rendered Login/Dashboard and Organizations, Users, Projects, Workflows, Websites, QA, Usage, Audit, System screenshots at 1440×900. Layout checks also cover 1024/768/500 widths. Screenshots remain outside the repository/build; only disposable fixtures are shown.
+
+
+## Русский интерфейс и Финансы v1
+
+Интерфейс панели владельца полностью русскоязычный: навигация, вход, выход, заголовки, таблицы, состояния, доступность, роли, статусы, сведения о процессах, QA и аудит. Общие словари и форматирование находятся в `apps/web/src/labels.ts`. Идентификаторы UUID/API/HTTP, названия провайдеров/моделей, QA issue codes и неизвестные диагностические коды сохраняются. Произвольные сохранённые названия, сообщения и рекомендации не переводятся автоматически и отображаются безопасным текстом. Даты и числа используют ru-RU; большие целые токены форматируются через BigInt без потери точности; NULL никогда не превращается в 0.
+
+Строка «Только просмотр» находится непосредственно под логотипом в Sidebar. BrandLogo, SVG/favicon assets, tokens и правила размеров логотипа не изменены.
+
+### Финансы: доступные данные и границы
+
+Новый маршрут `/admin/finance` находится рядом с «Использование ИИ». На «Обзоре» добавлен компактный финансовый блок. Доход, расходы, прибыль и маржинальность показывают «Недоступно» с пояснением «Финансовый учёт ещё не подключён». Денежных DTO/records пока нет: отсутствующая сумма не подменяется нулём или вычисленным значением.
+
+Раздел содержит три представления: «Использование ИИ», «По организациям», «По проектам». Первое показывает реальные сохранённые provider/model/agent/outcome, input/output/cached/total tokens, duration, timestamp, project/organization/workflow. Одна строка — попытка обращения к провайдеру; попытки fallback не считаются отдельными выполнениями агента. Страница не выдаёт сумму текущих 20 строк за полный итог и не строит ложные графики. Cached входит в input и повторно не суммируется. Неизвестные токены остаются «Недоступно», известный ноль сохраняется.
+
+Организации и проекты показывают существующие безопасные метаданные и недоступные денежные показатели. Ссылки открывают уже существующие детальные страницы и scoped использование ИИ. Это не финансовая агрегация: Monetary Cost Accounting, Billing, Revenue/Profit/Margin отсутствуют до появления реального учёта.
+
+Нового API endpoint, backend DTO, SQL, миграций или grants нет. Используются существующие `GET /api/v1/admin/usage`, `/organizations`, `/projects`: platform_owner/platform_admin only, unauthenticated 401, ordinary org user 403, параметризованные запросы, safe projections, обязательный platform_read audit в транзакции, fail-closed при отказе аудита, прежний rate limit. Ответы ограничены 20 строками на страницу, offset до 10000; frontend не скачивает все страницы и не пересылает произвольные query parameters. Auth/session/CSRF/CORS/cookies/tenant enforcement не менялись. Console остаётся только для просмотра, кроме входа/выхода.
+
+### Будущий Cost Accounting — не реализован
+
+Планируемая модель: AIProviderPrice/ModelPrice → CostSnapshot, RevenueEvent, ExpenseEvent, Invoice, Payment, ProjectCost и OrganizationFinanceSummary. Сейчас speculative таблицы не создаются. Денежные записи должны иметь currency code (например RUB/USD/EUR); суммы разных валют нельзя складывать без отдельной политики конвертации.
+
+Будущая формула: выручка − стоимость AI provider − прочие затраты платформы/проекта = валовая прибыль; маржинальность = прибыль / выручка × 100. Пока нет подтверждённых денежных записей или корректного знаменателя, результат недоступен. Цены провайдеров не захардкожены. Стоимость execution должна фиксироваться историческим snapshot по действовавшему тарифу и валюте, включая отдельную политику cached tokens; сегодняшние цены не пересчитывают прошлые затраты.
+
+Следующий предлагаемый этап: контракт Monetary Cost Accounting с версионированием тарифов и историческими cost snapshots. В этом ТЗ не реализуется.
+
+
+Проверки этапа русификации/Финансов: **1069 PASS / 0 FAIL** (baseline 1059): 913 основных, 35 PostgreSQL persistence, 75 Auth/API PostgreSQL, 45 браузерных, 1 browser → API → PostgreSQL smoke. Добавлены 10 браузерных проверок для локализации, навигации, неизменной ширины логотипа 184px, role/unauthenticated denial, пагинации финансов, NULL/zero/large integer, empty/error states. Существующие XSS и security assertions сохранены. Typecheck, production build, security/secret scan, bundle scan и diff check PASS. Локальные снимки Login, Обзора, Финансов и основных разделов проверены при 1440×900; данные исключительно из одноразовых test fixtures.
+
+Файлы этого этапа: новые `apps/web/src/{labels.ts,finance.tsx}`; изменены `apps/web/index.html`, `apps/web/src/{app.tsx,components.tsx,style.css}`, `apps/web/tests/{console.spec.mjs,local-smoke.spec.mjs}`, `scripts/test-console-docker.mjs`, README и актуальные записи ADMIN-CONSOLE/SPEC/DEVELOPMENT-PLAN. Backend/DB/brand assets/dependencies не менялись. `.env` не изменён, игнорируется Git. Live AI calls: none. Commit: none.
