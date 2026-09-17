@@ -1,5 +1,7 @@
 # Kleo
 
+Owner Console: меню разделено на категории; профиль и read-only основа раздела сотрудников доступны в «Настройки». [Описание и ограничения](docs/ADMIN-CONSOLE.md).
+
 Актуализация Owner Console: русский интерфейс и раздел «Финансы» (`/admin/finance`) с сохранённой телеметрией ИИ; денежный учёт пока не подключён. Размер и assets логотипа сохранены. Подробности: [ADMIN-CONSOLE](docs/ADMIN-CONSOLE.md).
 
 **Current checkpoint: AiVeron Owner/Admin Console v1.** Read-only React/TypeScript interface for platform_owner/platform_admin: overview, organizations, users, projects, workflows/executions, Websites/versions, validated QA, persisted AI usage, security audit and API liveness. Existing cookie auth/CSRF and explicit audited admin authorization remain the boundary. [Console routes, local commands, tests and limitations](docs/ADMIN-CONSOLE.md). Start API with `npm run api:start`, UI with `npm run web:dev`; production bundle: `npm run web:build`. No deployment or production-readiness claim. Earlier checkpoint descriptions below are historical.

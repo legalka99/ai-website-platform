@@ -215,3 +215,25 @@ Branding-only file delta over the pre-existing uncommitted Console:
 Проверки этапа русификации/Финансов: **1069 PASS / 0 FAIL** (baseline 1059): 913 основных, 35 PostgreSQL persistence, 75 Auth/API PostgreSQL, 45 браузерных, 1 browser → API → PostgreSQL smoke. Добавлены 10 браузерных проверок для локализации, навигации, неизменной ширины логотипа 184px, role/unauthenticated denial, пагинации финансов, NULL/zero/large integer, empty/error states. Существующие XSS и security assertions сохранены. Typecheck, production build, security/secret scan, bundle scan и diff check PASS. Локальные снимки Login, Обзора, Финансов и основных разделов проверены при 1440×900; данные исключительно из одноразовых test fixtures.
 
 Файлы этого этапа: новые `apps/web/src/{labels.ts,finance.tsx}`; изменены `apps/web/index.html`, `apps/web/src/{app.tsx,components.tsx,style.css}`, `apps/web/tests/{console.spec.mjs,local-smoke.spec.mjs}`, `scripts/test-console-docker.mjs`, README и актуальные записи ADMIN-CONSOLE/SPEC/DEVELOPMENT-PLAN. Backend/DB/brand assets/dependencies не менялись. `.env` не изменён, игнорируется Git. Live AI calls: none. Commit: none.
+
+
+## Sidebar и Настройки — текущий этап
+
+Навигация централизована в `apps/web/src/sidebar.tsx`: «УПРАВЛЕНИЕ СИСТЕМОЙ» (Обзор, Процессы, Сайты, QA, Использование ИИ, Аудит, Система); «КЛИЕНТЫ» (Организации, Пользователи, Проекты); «ФИНАНСЫ И ОТЧЁТНОСТЬ» (Финансы). Порядок и категории — информационная структура, не механизм авторизации. Сервер остаётся границей доступа; скрытие пунктов меню не выдаёт и не ограничивает permissions.
+
+Под неизменным логотипом общий `ConsoleStatus` показывает «Только просмотр» и маленький декоративный индикатор. Пульс означает доступность открытого интерфейса, не состояние backend/БД, подписок или клиентов. Текст сохраняется независимо от цвета. `prefers-reduced-motion: reduce` отключает анимацию. В будущем реальные подписки, клиенты, health и usage могут подключаться сюда только из авторизованного API с явными состояниями loading/unknown/stale.
+
+Внизу Sidebar находятся реальная платформенная роль из `/auth/me` и ссылка «Настройки». Email текущего аккаунта убран из TopBar и Sidebar; он доступен в профиле. Email других аккаунтов в существующем разделе пользователей остаётся частью его read-only данных. Кнопка выхода сохранена в TopBar. На desktop основное меню прокручивается независимо от нижней зоны; на узком экране категории располагаются горизонтально с прокруткой, роль/настройки доступны отдельной нижней строкой. BrandLogo, размеры, tokens и assets не изменены.
+
+### Настройки
+
+`/admin/settings` — Профиль; `/admin/settings?section=employees` — Сотрудники. `settings.tsx` получает существующий safe SessionView.user: только email и человекочитаемая роль выводятся явно. Отдельного источника истины/хранилища профиля нет. Произвольные поля DTO, hashes, tokens и credentials не отображаются; строки React экранируются.
+
+«Сотрудники» — честный readiness state: отдельная employee-модель отсутствует, а admin users содержит клиентские аккаунты. Поэтому список всех users не выдаётся за сотрудников, профиль владельца тоже не превращается в фиктивную строку штата. Обозначены будущие ФИО, email, телефон, мессенджеры, роль и статус; отсутствующие значения будут «Не указано». Никаких fake rows, форм приглашения/блокировки/изменения ролей или лишних запросов admin users нет. Backend endpoints, DTO, SQL, grants и migrations не добавлены.
+
+Профиль/сотрудники остаются read-only. ФИО, телефон, Telegram/WhatsApp, пароль, MFA и активные сессии требуют отдельных безопасных write-контрактов. Будущие EmployeeProfile (контактные данные/статус) и Access (роль/permissions/MFA/account state/sessions) должны быть разделены типами и серверными контрактами, а не объединены в произвольный JSON. Подробный roadmap — KLEO-DEVELOPMENT-PLAN.md.
+
+
+Проверки Sidebar/Settings: **1077 PASS / 0 FAIL**, baseline 1069. 913 основных tests, 35 PostgreSQL persistence, 75 Auth/API PostgreSQL, 53 браузерных и 1 browser → API → PostgreSQL smoke. Добавлены 8 проверок: группы/порядок/роль/email, reduced motion, профили обеих платформенных ролей, честное состояние сотрудников, отказ ordinary user, безопасный вывод профиля и отсутствие лишних полей, доступность меню на 1440×900/1024×700/768×600/500×800. Сохранены прежние logo/XSS/finance/auth assertions. Typecheck, production build, security/secret scan, bundle scan, git diff check — PASS. Визуально проверены профиль/сотрудники на 1440×900 и 1024×700; скриншоты вне репозитория и сборки, только одноразовые test fixtures.
+
+Файлы этапа: новые `apps/web/src/sidebar.tsx` и `settings.tsx`; обновлены `app.tsx`, `style.css`, оба browser test файла, screenshot copy list в `scripts/test-console-docker.mjs`, README, ADMIN-CONSOLE, SPEC и DEVELOPMENT-PLAN. Новых зависимостей, API endpoints, migrations и изменений backend/security/brand assets нет. Actual .env не изменён и игнорируется. Live AI calls: none. Commit: none.

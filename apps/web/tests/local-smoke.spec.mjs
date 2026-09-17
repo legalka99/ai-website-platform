@@ -65,6 +65,15 @@ test("real local browser → HTTP → restricted PostgreSQL: owner navigation/lo
     page.getByRole("heading", { name: "Этапы выполнения" }),
   ).toBeVisible();
   await expect(page.locator(".timeline")).toContainText("QA");
+  await page.goto("/admin/settings");
+  await expect(page.getByRole("region", { name: "Профиль", exact: true })).toContainText("owner@example.test");
+  await page.screenshot({ path: "/tmp/kleo-console-settings.png", fullPage: true });
+  await page.getByRole("link", { name: "Сотрудники", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Учёт сотрудников ещё не подключён" })).toBeVisible();
+  await page.screenshot({ path: "/tmp/kleo-console-employees.png", fullPage: true });
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await page.screenshot({ path: "/tmp/kleo-console-settings-laptop.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/admin/system");
   await expect(page.locator("main")).toContainText("Доступен");
   await page.screenshot({ path: "/tmp/kleo-console-system.png", fullPage: true });

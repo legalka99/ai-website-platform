@@ -475,8 +475,8 @@ test("Russian navigation and read-only label below the unchanged logo", async ({
     return el.previousElementSibling?.classList.contains("brand") && el.getBoundingClientRect().top >= logo.getBoundingClientRect().bottom;
   })).toBe(true);
   expect(await page.locator(".sidebar .brand-logo").evaluate(el => ({ width: getComputedStyle(el).width, height: el.getAttribute("height"), src: el.getAttribute("src") }))).toEqual({ width: "184px", height: "212", src: "/brand/aiveron-logo.svg" });
-  await expect(page.locator(".topbar")).toContainText("Владелец платформы");
-  await expect(page.locator(".sidebar nav a")).toHaveText(["01Обзор", "02Организации", "03Пользователи", "04Проекты", "05Процессы", "06Сайты", "07QA", "08Использование ИИ", "09Финансы", "10Аудит", "11Система"]);
+  await expect(page.locator(".sidebar-footer")).toContainText("Владелец платформы");
+  await expect(page.locator(".sidebar nav a")).toHaveText(["Обзор", "Процессы", "Сайты", "QA", "Использование ИИ", "Аудит", "Система", "Организации", "Пользователи", "Проекты", "Финансы", "Настройки"]);
   await expect(page.getByRole("region", { name: "Финансовые показатели" })).toContainText("Недоступно");
   await page.getByRole("navigation", { name: "Основная навигация" }).getByRole("link", { name: "Финансы" }).click();
   await expect(page).toHaveURL(/\/admin\/finance$/);
@@ -544,4 +544,104 @@ test("key page headings and controls have no English UI leftovers", async ({ pag
     const chrome = await page.locator("h1,h2,th,button,label,.sidebar,.topbar,.footer,.page-header,.finance-note,.metadata dt").allTextContents();
     expect(chrome.join(" ")).not.toMatch(/\b(?:Console|Dashboard|Workflows?|Websites?|Usage|Audit|System|Finance|Provider|Model|Agent|Input|Output|Cached|Score|Actor|Attempt|Planned|Read-only|Owner|WORKSPACE|PLATFORM)\b/);
   }
+});
+
+test("sidebar categories own the correct links and role/settings stay below navigation", async ({ page }) => {
+  await mock(page);
+  await page.goto("/admin");
+  for (const [name, labels] of [
+    ["УПРАВЛЕНИЕ СИСТЕМОЙ", ["Обзор", "Процессы", "Сайты", "QA", "Использование ИИ", "Аудит", "Система"]],
+    ["КЛИЕНТЫ", ["Организации", "Пользователи", "Проекты"]],
+    ["ФИНАНСЫ И ОТЧЁТНОСТЬ", ["Финансы"]],
+  ]) await expect(page.getByRole("region", { name, exact: true }).getByRole("link")).toHaveText(labels);
+  await expect(page.locator(".sidebar-footer")).toContainText("Владелец платформы");
+  for (const area of [".sidebar", ".topbar"]) await expect(page.locator(area)).not.toContainText("owner@example.test");
+  expect(await page.locator(".sidebar-footer").evaluate(el => el.previousElementSibling.classList.contains("grouped-navigation"))).toBe(true);
+  await page.getByRole("link", { name: "Настройки", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/settings$/);
+});
+test("console indicator respects reduced motion and retains its text meaning", async ({ page }) => {
+  await mock(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/admin");
+  await expect(page.locator(".console-indicator")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".sidebar-mode")).toHaveText("Только просмотр");
+  await expect(page.locator(".console-indicator")).toHaveCSS("animation-name", "console-pulse");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator(".console-indicator")).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".sidebar-mode")).toBeVisible();
+});
+for (const [role, label] of [["platform_owner", "Владелец платформы"], ["platform_admin", "Администратор платформы"]])
+  test(`settings profile projects authenticated ${role}`, async ({ page }) => {
+    const requests = await mock(page, { role });
+    await page.goto("/admin/settings");
+    await expect(page.getByRole("region", { name: "Профиль", exact: true })).toContainText("owner@example.test");
+    await expect(page.getByRole("region", { name: "Профиль", exact: true })).toContainText(label);
+    expect(requests.some(r => r.path.includes("/admin/"))).toBe(false);
+    await expect(page.locator("main input, main button")).toHaveCount(0);
+  });
+test("employees readiness does not misclassify client accounts or invent profiles", async ({ page }) => {
+  const requests = await mock(page);
+  await page.goto("/admin/settings?section=employees");
+  await expect(page.getByRole("heading", { name: "Учёт сотрудников ещё не подключён" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Не указано");
+  await expect(page.locator("main input,main button,main tbody tr")).toHaveCount(0);
+  await expect(page.locator("main")).not.toContainText("owner@example.test");
+  expect(requests.some(r => r.path.includes("/admin/"))).toBe(false);
+});
+test("settings remains unavailable to ordinary organization users", async ({ page }) => {
+  const requests = await mock(page, { role: "user" });
+  await page.goto("/admin/settings?section=employees");
+  await expect(page.getByRole("heading", { name: "Доступ запрещён" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Разделы настроек" })).toHaveCount(0);
+  expect(requests.some(r => r.path.includes("/admin/"))).toBe(false);
+});
+test("profile renders text only and ignores extra sensitive fields", async ({ page }) => {
+  await page.route("http://localhost:3001/api/v1/auth/me", route => route.fulfill({
+    contentType: "application/json", headers: { "access-control-allow-origin": "http://localhost:3000", "access-control-allow-credentials": "true" },
+    body: JSON.stringify({ user: { ...user, email: "<img src=x onerror=alert(1)>", passwordHash: "PRIVATE_HASH", sessionTokenHash: "PRIVATE_SESSION", providerKey: "PRIVATE_PROVIDER", databaseUrl: "PRIVATE_DB" }, csrfToken: "PRIVATE_CSRF" }),
+  }));
+  await page.goto("/admin/settings");
+  await expect(page.locator("main dd").first()).toHaveText("<img src=x onerror=alert(1)>");
+  await expect(page.locator("main dd img, main script")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(/PRIVATE_(HASH|SESSION|PROVIDER|DB|CSRF)/);
+});
+test("grouped sidebar and settings remain reachable on shorter and narrow screens", async ({ page }) => {
+  await mock(page);
+  await page.goto("/admin/settings");
+  for (const [width, height] of [[1440,900], [1024,700], [768,600], [500,800]]) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole("link", { name: "Настройки", exact: true })).toBeInViewport();
+    await expect(page.locator(".sidebar-mode")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("link", { name: "Финансы", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/admin\/finance$/);
+    await page.getByRole("link", { name: "Настройки", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Настройки", exact: true })).toBeVisible();
+  }
+});
+
+
+test("sidebar groups have visible separation and account role has its own surface above settings", async ({ page }) => {
+  await mock(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin/settings");
+  await expect(page.locator(".nav-group")).toHaveCount(3);
+  const groups = await page.locator(".nav-group").evaluateAll(elements => elements.map(el => ({ top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom, padding: parseFloat(getComputedStyle(el).paddingTop), border: getComputedStyle(el).borderTopWidth })));
+  for (let i = 1; i < groups.length; i++) {
+    expect(groups[i].top - groups[i-1].bottom).toBeGreaterThanOrEqual(28);
+    expect(groups[i].padding).toBeGreaterThanOrEqual(20);
+    expect(groups[i].border).toBe("1px");
+  }
+  const account = await page.locator(".sidebar-role").evaluate(el => {
+    const css = getComputedStyle(el), r = el.getBoundingClientRect(), settings = el.nextElementSibling.getBoundingClientRect();
+    return { bg: css.backgroundColor, parentBg: getComputedStyle(document.querySelector(".sidebar")).backgroundColor, border: css.borderTopWidth, radius: parseFloat(css.borderRadius), bottom: r.bottom, settingsTop: settings.top };
+  });
+  expect(account.bg).not.toBe(account.parentBg);
+  expect(account.border).toBe("1px");
+  expect(account.radius).toBeGreaterThan(0);
+  expect(account.settingsTop - account.bottom).toBeGreaterThanOrEqual(10);
+  await expect(page.locator(".nav-group").last()).toBeInViewport();
+  await expect(page.getByRole("link", { name: "Настройки", exact: true })).toBeInViewport();
 });

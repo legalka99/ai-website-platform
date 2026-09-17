@@ -1,5 +1,7 @@
 # Kleo — единое ТЗ и план разработки
 
+Текущий UI checkpoint: категоризированный Sidebar, статус «Только просмотр», роль и Настройки снизу; `/admin/settings` показывает профиль из `/auth/me` и readiness раздела сотрудников. Всё read-only, без новых прав/миграций. Будущие RBAC/MFA, поддержка/претензии, банки/платежи/УПД/ЭДО, Marketing Integrations (Яндекс Директ, Google Ads, VK Ads), AI Assistant, Call Center, Client App и Staff App зафиксированы только в [roadmap](KLEO-DEVELOPMENT-PLAN.md#будущее-рабочее-пространство-aiveron--только-roadmap).
+
 Актуализация Owner Console: русский интерфейс и раздел «Финансы» (`/admin/finance`) с сохранённой телеметрией ИИ; денежный учёт пока не подключён. Размер и assets логотипа сохранены. Подробности: [ADMIN-CONSOLE](ADMIN-CONSOLE.md).
 
 **Current checkpoint: AiVeron Owner/Admin Console v1.** Read-only platform UI is implemented above existing authenticated HTTP API: Dashboard, organizations/users/projects, workflow timeline, Website versions, QA, usage, audit and system liveness. Dedicated audited admin reads provide safe projections; UI has no DB access and launches no AI. [Current Console contract and limits](ADMIN-CONSOLE.md). No client cabinet, publishing, destructive admin actions or public deployment. Next proposed stage: administrator MFA/recovery/session management. Following checkpoint statements are historical.

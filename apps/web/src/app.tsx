@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Link,
-  NavLink,
   Navigate,
   Route,
   Routes,
@@ -18,6 +17,8 @@ import type {
 } from "../../../packages/core/src/admin-api.js";
 import { titles, humanLabel, numberLabel } from "./labels.js";
 import { Finance, FinanceOverview } from "./finance.js";
+import { ConsoleStatus, SidebarNavigation, SidebarFooter } from "./sidebar.js";
+import { Settings } from "./settings.js";
 import { BrandLogo } from "./brand.js";
 import { api, ApiError } from "./api.js";
 import {
@@ -31,19 +32,6 @@ import {
   useRemote,
 } from "./components.js";
 
-const sections: [string, string][] = [
-  ["", "Обзор"],
-  ["organizations", "Организации"],
-  ["users", "Пользователи"],
-  ["projects", "Проекты"],
-  ["workflows", "Процессы"],
-  ["websites", "Сайты"],
-  ["qa", "QA"],
-  ["usage", "Использование ИИ"],
-  ["finance", "Финансы"],
-  ["audit", "Аудит"],
-  ["system", "Система"],
-];
 function Brand() {
   return (
     <Link className="brand" to="/admin" aria-label="AiVeron — обзор">
@@ -153,29 +141,14 @@ export function App() {
       </a>
       <aside className="sidebar">
         <Brand />
-        <p className="sidebar-mode">Только просмотр</p>
-        <p className="nav-label">НАВИГАЦИЯ</p>
-        <nav aria-label="Основная навигация">
-          {sections.map(([path, label], i) => (
-            <NavLink
-              key={path}
-              end={path === ""}
-              to={"/admin" + (path ? "/" + path : "")}
-            >
-              <span className="nav-index" aria-hidden="true">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+        <ConsoleStatus />
+        <SidebarNavigation />
+        <SidebarFooter role={user.platformRole} />
       </aside>
       <div className="workspace">
         <header className="topbar">
           <span className="topbar-label">Управление платформой</span>
           <div className="account">
-            <span className="account-email">{user.email}</span>
-            <Badge value={user.platformRole} />
             <button
               className="subtle"
               onClick={() => void logout()}
@@ -190,6 +163,7 @@ export function App() {
           <Routes>
             <Route path="/admin" element={<Dashboard />} />
             <Route path="/admin/finance" element={<Finance />} />
+            <Route path="/admin/settings" element={<Settings user={user} />} />
             {(
               [
                 "organizations",

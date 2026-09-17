@@ -139,3 +139,18 @@ Implemented: Content contract без расширения полей, строг
 Implemented: Content uses confirmed BusinessProfile and optional explicit businessFacts as source of truth; DesignDirection is not authority for business claims. Prompt/schema guidance and deterministic RU/EN high-risk claim validation complement existing runtime/security checks. Recognized unsupported commercial claims are rejected before state.content/Website Model, without retry or fallback. Missing facts are omitted or requested in notes; style is distinguished from company qualities. General factual truth is not proven by these checks.
 
 576 offline tests pass, including both provider adapters with fake transport and grounding failures with preserved telemetry. New input constraints, exact supported risky clauses, safe derivations, diagnostics and limitations: [CONTENT-AGENT](CONTENT-AGENT.md). No live requests, new dependencies or changes to Router/security guards. Real Developer/QA and Kleo Sentinel remain PLANNED; mandatory pentest and public Security Gate remain in force.
+
+
+## Будущее рабочее пространство AiVeron — только roadmap
+
+Следующие направления **не реализованы**, не создают меню/страниц «скоро» и не расширяют текущие permissions:
+
+- **Сотрудники и RBAC:** отдельные EmployeeProfile (ФИО, email, phone, messengers, status) и Access (platform role, permissions, MFA, account state, sessions). Будущие роли: владелец, администратор, финансист, бухгалтер, менеджер, поддержка, аналитик, разработчик, контент-менеджер. Backend enum сейчас не расширяется. Кандидаты permissions: clients.read/write, finance.read, finance.documents.read, ai.usage.read, ai.providers.manage, workflows.run/cancel, websites.publish, audit.read, employees.manage. Все полномочия проверяет сервер; UI не является границей безопасности. MFA/recovery, смена пароля и управление сессиями — отдельные этапы.
+- **Клиенты:** подписки, обращения, претензии и поддержка. Источники обращений: email, форма сайта, клиентский кабинет, чат, телефон/колл-центр, мессенджеры. Будущая ticket-модель: client, source, category, priority, assignee, status, correspondence history.
+- **Финансы и документы:** платежи, банковские операции, счета, УПД, акты, ЭДО, отчёты и сверки. Будущий цикл: клиент → подписка/счёт → платёж → банк/эквайринг → сверка платежа → оказание услуги → закрывающий документ → УПД/акт/чек → ЭДО/клиентский кабинет. Цены, денежные значения и интеграции сейчас не выдумываются.
+- **Marketing Integrations:** Яндекс Директ, Google Ads, VK Ads и другие площадки. Сначала read-only analytics, затем управление через отдельные approvals, scoped credentials и лимиты. Реальная доступность каждой интеграции проверяется перед реализацией.
+- **ИИ-ассистент панели:** поиск клиента, failed QA, использование ИИ, объяснение ошибок процесса, подготовка отчёта/ответа клиенту, работа с обращениями. Ассистент действует строго в permissions сотрудника; каждый запрос/tool authorizes server-side. Chat сейчас не реализуется.
+- **Колл-центр — дальний этап:** входящий звонок → поиск клиента → контекст проекта/подписки → обращения → подсказки ИИ → история звонков.
+- **Client App — дальний этап:** проекты, сайты, статистика, SEO/GEO, документы, платежи, поддержка, уведомления. **Staff App** — отдельный будущий клиент для сотрудников. Web Admin, Client Web, Client App и Staff App используют единый Backend/API как источник бизнес-поведения; бизнес-логика не дублируется в клиентах.
+
+Следующий предлагаемый этап: security design доступа сотрудников — матрица permissions и границы EmployeeProfile/Access до любых admin write actions. В текущую реализацию не входит.
