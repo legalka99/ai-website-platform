@@ -1,5 +1,7 @@
 # AiVeron Authentication / HTTP API / Tenant Enforcement
 
+Subsequent checkpoint: [AiVeron Owner/Admin Console v1](ADMIN-CONSOLE.md) now consumes this foundation. Explicit platform-admin projection routes add dashboard/detail/Websites/versions/QA/usage/audit reads; existing cookies, CSRF, CORS, tenant repositories and role separation are unchanged. `api-grants.sql` adds read-only columns required by Console; migrations 001/002 remain immutable. Earlier statements below about absent UI/raw QA text describe the Auth checkpoint: Console now exposes only runtime-validated QA issue fields, never raw report/provider documents. Production readiness and RLS gaps remain open.
+
 Base: clean main, `d3267f8` (Persistence Foundation). AiVeron — публичный бренд; Kleo packages/imports остаются. Нет UI, deployment, DNS изменений или AI provider calls. Этот checkpoint готовит backend для первой Owner/Admin Console, но не является public production certification.
 
 ## Компоненты

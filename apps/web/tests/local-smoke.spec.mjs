@@ -1,0 +1,99 @@
+import { test, expect } from "@playwright/test";
+test("real local browser → HTTP → restricted PostgreSQL: owner navigation/logout/tenant denial", async ({
+  page,
+  context,
+}) => {
+  const external = [];
+  await context.route("**/*", async (route) => {
+    const host = new URL(route.request().url()).hostname;
+    if (!["localhost", "127.0.0.1"].includes(host)) {
+      external.push(host);
+      return route.abort();
+    }
+    return route.continue();
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/login");
+  await expect(page.getByRole("img", { name: "AiVeron", exact: true })).toBeVisible();
+  await page.screenshot({ path: "/tmp/kleo-console-login.png", fullPage: true });
+  async function login(email) {
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page
+      .getByLabel("Пароль", { exact: true })
+      .fill("TEST_ONLY_Local_Console_42");
+    await page.getByRole("button", { name: "Войти в Console" }).click();
+  }
+  await login("owner@example.test");
+  await expect(
+    page.getByRole("heading", { name: "Обзор платформы" }),
+  ).toBeVisible();
+  await expect(page.locator(".metrics")).toContainText("1");
+  const cookie = (await context.cookies("http://localhost:3001")).find(
+    (c) => c.name === "kleo_session",
+  );
+  expect(cookie.httpOnly).toBe(true);
+  expect(cookie.sameSite).toBe("Strict");
+  await expect(page.locator("body")).not.toContainText(cookie.value);
+  for (const [path, title] of [
+    ["organizations", "Организации"],
+    ["users", "Пользователи"],
+    ["projects", "Проекты"],
+    ["workflows", "Workflows"],
+    ["websites", "Websites"],
+    ["qa", "Контроль качества"],
+    ["usage", "AI Usage"],
+    ["audit", "Audit"],
+  ]) {
+    await page.goto("/admin/" + path);
+    await expect(
+      page.getByRole("heading", { name: title, exact: true }),
+    ).toBeVisible();
+    await expect(page.locator("tbody tr").first()).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await page.screenshot({ path: `/tmp/kleo-console-${path}.png`, fullPage: true });
+  }
+  await page.goto("/admin/websites");
+  await page.locator("tbody a").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Версии сайтов" }),
+  ).toBeVisible();
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  await page.goto("/admin/workflows");
+  await page.locator("tbody a").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Этапы выполнения" }),
+  ).toBeVisible();
+  await expect(page.locator(".timeline")).toContainText("qa");
+  await page.goto("/admin/system");
+  await expect(page.locator("main")).toContainText("Online");
+  await page.screenshot({ path: "/tmp/kleo-console-system.png", fullPage: true });
+  await page.goto("/admin");
+  await expect(page.locator(".metrics")).toBeVisible();
+  await page.screenshot({
+    path: "/tmp/kleo-console-local-smoke.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  expect(
+    (await context.cookies("http://localhost:3001")).some(
+      (c) => c.name === "kleo_session",
+    ),
+  ).toBe(false);
+  await login("tenant@example.test");
+  await expect(
+    page.getByRole("heading", { name: "Доступ запрещён" }),
+  ).toBeVisible();
+  const denied = await page.evaluate(async () => {
+    const r = await fetch("http://localhost:3001/api/v1/admin/projects", {
+      credentials: "include",
+    });
+    return { status: r.status, body: await r.json() };
+  });
+  expect(denied.status).toBe(403);
+  expect(denied.body.data).toBeUndefined();
+  expect(external).toEqual([]);
+  expect(
+    await page.evaluate(() => [localStorage.length, sessionStorage.length]),
+  ).toEqual([0, 0]);
+});

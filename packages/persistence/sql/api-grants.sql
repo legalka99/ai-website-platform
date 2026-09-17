@@ -12,3 +12,7 @@ GRANT UPDATE(revoked_at) ON kleo.auth_sessions TO kleo_api;
 GRANT UPDATE(id) ON kleo.users,kleo.organizations,kleo.projects TO kleo_api;
 GRANT UPDATE(user_id) ON kleo.memberships,kleo.auth_accounts TO kleo_api;
 -- No passwords/role writes, DELETE, DDL, workflow generation or Website mutation.
+-- Console read projection: QA is runtime validated and projected before HTTP output.
+GRANT SELECT(document) ON kleo.qa_reports TO kleo_api;
+GRANT SELECT(id,organization_id,project_id,workflow_run_id,agent_type,status,created_at) ON kleo.agent_executions TO kleo_api;
+GRANT SELECT(id,actor_id,request_id,event_type,resource_type,resource_id,created_at) ON kleo.security_audit_events TO kleo_api;

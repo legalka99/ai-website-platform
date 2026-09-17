@@ -8,6 +8,8 @@ import { httpSecurityDefaults } from '../../../packages/security/src/http.js';
 import { InMemoryRateLimiter } from '../../../packages/security/src/rate-limit.js';
 import { containsSecret } from '../../../packages/security/src/redaction.js';
 import { validateConfig,type ApiConfig } from './config.js';
+import { adminList,adminDetail,adminDashboard,type AdminFilter } from '../../../packages/persistence/src/admin.js';
+import type { AdminKind } from '../../../packages/core/src/admin-api.js';
 const id={type:'string',pattern:'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$'};
 const object=(properties:Record<string,unknown>,required=Object.keys(properties))=>({type:'object',additionalProperties:false,properties,required});
 const paging={limit:{type:'string',pattern:'^(?:[1-9]|[1-4][0-9]|50)$'},offset:{type:'string',pattern:'^(?:0|[1-9][0-9]{0,3}|10000)$'}};
@@ -78,7 +80,18 @@ export async function createApi(auth:AuthRepository,config:ApiConfig,options:{ht
  for(const [kind,suffix] of resources){const params={projectId:id,...(kind==='versions'?{websiteId:id}:{}),...(kind==='qa'?{versionId:id}:{})};
   app.get(`/api/v1/projects/:projectId${suffix}`,{schema:{params:object(params),querystring:object(paging,[])}},req=>session(req,async(db,actor)=>{const p=req.params as any;return list(await auth.resources(db,actor,p.projectId,kind,page(req.query),p.websiteId,p.versionId),req.query);}));
  }
- for(const kind of ['users','organizations','projects','workflows'] as const)app.get(`/api/v1/admin/${kind}`,{schema:{querystring:object(paging,[])}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'admin',30);return list(await auth.admin(db,actor,kind,page(req.query),req.id),req.query);}));
+ const adminFilters:Record<AdminKind,readonly (keyof AdminFilter)[]>={users:[],organizations:[],projects:['organizationId'],workflows:['organizationId','projectId'],websites:['projectId'],versions:['projectId','websiteId'],qa:['projectId','workflowId'],usage:['projectId','workflowId'],'audit-events':[]};
+ for(const kind of Object.keys(adminFilters) as AdminKind[]){
+  const keys=adminFilters[kind],filters=Object.fromEntries(keys.map(key=>[key,id]));
+  app.get(`/api/v1/admin/${kind}`,{schema:{querystring:object({...paging,...filters},[])}},req=>session(req,async(db,actor)=>{
+   rate('actor',actor.userId,'admin',30);const query=req.query as Record<string,string>;
+   return adminList(auth,db,actor,kind,page(query),req.id,Object.fromEntries(keys.filter(key=>query[key]!==undefined).map(key=>[key,query[key]])));
+  }));
+ }
+ for(const kind of ['organizations','users','projects','workflows'] as const)app.get(`/api/v1/admin/${kind}/:id`,{schema:{querystring:emptyQuery,params:object({id})}},req=>session(req,async(db,actor)=>{
+  rate('actor',actor.userId,'admin',30);return adminDetail(auth,db,actor,kind,(req.params as {id:string}).id,req.id);
+ }));
+ app.get('/api/v1/admin/dashboard',{schema:{querystring:emptyQuery}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'admin',30);return adminDashboard(auth,db,actor,req.id);}));
  // Public registration, role mutation, publishing and AI execution have no routes.
  await app.ready();return app;
 }

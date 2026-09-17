@@ -1,5 +1,7 @@
 # Kleo
 
+**Current checkpoint: AiVeron Owner/Admin Console v1.** Read-only React/TypeScript interface for platform_owner/platform_admin: overview, organizations, users, projects, workflows/executions, Websites/versions, validated QA, persisted AI usage, security audit and API liveness. Existing cookie auth/CSRF and explicit audited admin authorization remain the boundary. [Console routes, local commands, tests and limitations](docs/ADMIN-CONSOLE.md). Start API with `npm run api:start`, UI with `npm run web:dev`; production bundle: `npm run web:build`. No deployment or production-readiness claim. Earlier checkpoint descriptions below are historical.
+
 **Current checkpoint: AiVeron Auth / HTTP API / Tenant Enforcement Foundation.** Email/password authentication, PostgreSQL opaque sessions, CSRF/CORS, authenticated tenant metadata routes and separate audited platform-admin reads are implemented. [Contracts, endpoints, bootstrap and limitations](docs/AUTH-API-ARCHITECTURE.md). RLS remains deferred; application enforcement does not isolate arbitrary SQL through the trusted runtime DB login. Next: read-only Owner/Admin Console. UI, public registration and production readiness are not implemented. Earlier checkpoint descriptions and counts below are historical.
 
 **AiVeron — внешний бренд (aiveron.ru); Kleo — внутреннее имя codebase. Текущий checkpoint: Persistence / Database Foundation.** Добавлен отдельный PostgreSQL repository layer: organization/project scope, immutable Website versions, связанный QA, snapshots, execution/usage/audit и атомарное сохранение workflow. AI agents не обращаются к БД напрямую. [Архитектура и локальная проверка](docs/PERSISTENCE-ARCHITECTURE.md). Auth/API, production tenant enforcement, recovery/backups и deployment ещё не реализованы. Следующий этап — Auth + API + tenant enforcement.
@@ -38,7 +40,7 @@ PLANNED: renderer/preview, production storage operations, publishing, CMS integr
 
 ## Проверка проекта
 
-Нужны Node.js 22.9+ и npm (ручной скрипт использует встроенный loadEnvFile). В текущем окружении зависимости уже установлены. На новом компьютере сначала выполнить `npm ci`.
+Нужны Node.js 22.22+ и npm (включая требования текущего frontend router). В текущем окружении зависимости уже установлены. На новом компьютере сначала выполнить `npm ci`.
 
 ```sh
 npm run typecheck
@@ -47,7 +49,7 @@ npm test
 
 Тесты не вызывают внешние ИИ и не требуют ключей. Компиляция тестов сохраняется в `.test-build`, исключённой из Git.
 
-API запускается отдельно через `npm run api:start` с явной PostgreSQL configuration; см. [Auth/API architecture](docs/AUTH-API-ARCHITECTURE.md). Web UI отсутствует, общий `npm run dev` пока не является рабочим пользовательским приложением. Команды build/lint остаются заготовками.
+API запускается отдельно через `npm run api:start` с явной PostgreSQL configuration. В другом терминале `npm run web:dev` запускает Owner/Admin Console на localhost:3000. `npm run web:build` создаёт production frontend bundle; deployment не выполняется. Общий `npm run dev` не запускает оба долгоживущих процесса параллельно; используйте отдельные команды. См. [Console instructions](docs/ADMIN-CONSOLE.md).
 
 ## Следующий этап
 

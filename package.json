@@ -13,7 +13,7 @@
     "build": "npm run build --workspaces --if-present",
     "test": "tsc --noEmit false --outDir .test-build && node --test tests/*.test.mjs .test-build/packages/ai/src/orchestrator/tests/*.test.js",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @ai-platform/web",
     "smoke:content": "tsc --noEmit false --outDir .test-build && node scripts/smoke-content.mjs",
     "smoke:design": "tsc --noEmit false --outDir .test-build && node scripts/smoke-design.mjs",
     "smoke:business": "tsc --noEmit false --outDir .test-build && node scripts/smoke-business.mjs",
@@ -26,7 +26,12 @@
     "db:migrate": "tsc --noEmit false --outDir .test-build && node scripts/persistence-db.mjs",
     "api:start": "tsc --noEmit false --outDir .test-build && node .test-build/apps/api/src/index.js",
     "auth:bootstrap-owner": "tsc --noEmit false --outDir .test-build && node scripts/bootstrap-owner.mjs",
-    "test:auth": "tsc --noEmit false --outDir .test-build && node scripts/test-persistence.mjs --auth"
+    "test:auth": "tsc --noEmit false --outDir .test-build && node scripts/test-persistence.mjs --auth",
+    "web:dev": "npm run dev -w @ai-platform/web",
+    "web:build": "npm run build -w @ai-platform/web",
+    "test:web": "npm run test -w @ai-platform/web",
+    "test:console:local": "tsc --noEmit false --outDir .test-build && node scripts/test-persistence.mjs --console",
+    "test:console:docker": "node scripts/test-console-docker.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

@@ -30,3 +30,5 @@ id_ed25519*
 secrets.local.*
 credentials.local.*
 *.tsbuildinfo
+test-results/
+playwright-report/

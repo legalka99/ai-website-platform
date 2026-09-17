@@ -4,7 +4,8 @@ import { randomBytes,randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { migratePool } from './persistence-db.mjs';
 const authMode=process.argv.slice(2).join(' ')==='--auth';
-if(process.argv.length>2&&!authMode)throw Error('Invalid test mode');
+const consoleMode=process.argv.slice(2).join(' ')==='--console';
+if(process.argv.length>2&&!authMode&&!consoleMode)throw Error('Invalid test mode');
 const exec=promisify(execFile),name=`kleo-persistence-test-${randomUUID()}`,password=randomBytes(32).toString('hex');
 let started=false,pool;
 try{
@@ -14,7 +15,8 @@ try{
  pool=new Pool({host:'127.0.0.1',port,user:'postgres',password,database:'kleo_test',max:4,connectionTimeoutMillis:1000});
  let ready=false;for(let i=0;i<60;i++){try{await pool.query('SELECT 1');ready=true;break;}catch{await new Promise(r=>setTimeout(r,500));}}
  if(!ready)throw Error();await migratePool(pool);await migratePool(pool);
- const child=spawn(process.execPath,['--test',authMode?'tests/auth/api.test.mjs':'tests/persistence/postgres.test.mjs'],{stdio:'inherit',env:{...process.env,KLEO_ISOLATED_DB_TEST:'1',PGHOST:'127.0.0.1',PGPORT:String(port),PGUSER:'postgres',PGPASSWORD:password,PGDATABASE:'kleo_test',PGSSLMODE:'disable'}});
+ const child=spawn(process.execPath,consoleMode?['scripts/smoke-admin-local.mjs']:['--test',authMode?'tests/auth/api.test.mjs':'tests/persistence/postgres.test.mjs'],{stdio:'inherit',env:{...process.env,KLEO_ISOLATED_DB_TEST:'1',PGHOST:'127.0.0.1',PGPORT:String(port),PGUSER:'postgres',PGPASSWORD:password,PGDATABASE:'kleo_test',PGSSLMODE:'disable'}});
+ for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill('SIGTERM'));
  process.exitCode=await new Promise(resolve=>{child.on('error',()=>resolve(1));child.on('exit',code=>resolve(code??1));});
 }catch{console.error('Isolated PostgreSQL check failed; credentials and upstream output omitted.');process.exitCode=1;}
 finally{await pool?.end();if(started)await exec('docker',['rm','--force',name]).catch(()=>{});}

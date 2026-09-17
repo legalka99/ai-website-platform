@@ -112,3 +112,53 @@ test('cross-tenant admin read fails closed when its audit cannot be persisted',a
  finally{await pool.query('GRANT INSERT ON kleo.security_audit_events TO kleo_api');}
 });
 test('database rejects second platform owner independently of CLI policy',async()=>{await assert.rejects(pool.query("INSERT INTO kleo.platform_roles(user_id,role) VALUES($1,'platform_owner')",[A.userId]),e=>e.code==='23505');});
+
+// Console extensions keep the real restricted PostgreSQL role and existing tests.
+for(const kind of ['dashboard','websites','versions','qa','usage','audit-events']){
+ test(`console ${kind}: tenant denied, owner/admin allowed, explicit audited projection`,async t=>{
+  const {api}=await app(t),tenantSession=await login(api),ownerSession=await login(api,owner);
+  assert.equal((await request(api,`/api/v1/admin/${kind}`,tenantSession)).statusCode,403);
+  const c=await tenant();await pool.query("INSERT INTO kleo.platform_roles(user_id,role) VALUES($1,'platform_admin')",[c.userId]);const adminSession=await login(api,c);
+  for(const s of [ownerSession,adminSession]){const r=await request(api,`/api/v1/admin/${kind}`,s);assert.equal(r.statusCode,200);assert.equal((await pool.query("SELECT count(*) FROM kleo.security_audit_events WHERE request_id=$1 AND event_type='platform_read'",[r.headers['x-request-id']])).rows[0].count,'1');
+   for(const marker of ['password_hash','token_hash','document','headers','Bearer ','csrfToken',password])assert.ok(!r.body.includes(marker),marker);
+  }
+ });
+}
+for(const kind of ['organizations','users','projects','workflows'])test(`console ${kind} detail protected and bounded`,async t=>{
+ const {api}=await app(t),s=await login(api,owner),a=await login(api);
+ const target=kind==='organizations'?A.organizationId:kind==='users'?A.userId:kind==='projects'?A.projectId:undefined;
+ // Obtain workflow UUID from its project rather than relying on fixture return shape.
+ const id=kind==='workflows'?(await pool.query('SELECT id FROM kleo.workflow_runs WHERE project_id=$1 LIMIT 1',[A.projectId])).rows[0].id:target;
+ const r=await request(api,`/api/v1/admin/${kind}/${id}`,s);assert.equal(r.statusCode,200);assert.equal(r.json().item.id,id);assert.equal((await request(api,`/api/v1/admin/${kind}/${id}`,a)).statusCode,403);
+ assert.equal((await request(api,`/api/v1/admin/${kind}/${randomUUID()}`,s)).statusCode,404);assert.equal((await request(api,`/api/v1/admin/${kind}/bad`,s)).statusCode,400);
+ if(kind==='workflows')assert.ok(r.json().executions.length<=5);
+});
+test('console filters preserve both tenant scopes and nested website identity',async t=>{
+ const {api}=await app(t),s=await login(api,owner);
+ for(const tenant of [A,B])for(const kind of ['workflows','websites','versions','qa','usage']){const r=await request(api,`/api/v1/admin/${kind}?projectId=${tenant.projectId}`,s);assert.equal(r.statusCode,200);assert.ok(r.json().data.length);assert.ok(r.json().data.every(row=>row.project_id===tenant.projectId&&row.organization_id===tenant.organizationId));}
+ const mixed=await request(api,`/api/v1/admin/versions?projectId=${A.projectId}&websiteId=${B.stored.websiteId}`,s);assert.deepEqual(mixed.json().data,[]);
+});
+for(const query of ['limit=51','offset=10001','sort=id','userId=bad','role=platform_owner','projectId=bad'])test(`console rejects unsafe/bounded query ${query}`,async t=>{
+ const {api}=await app(t),s=await login(api,owner);assert.equal((await request(api,'/api/v1/admin/usage?'+query,s)).statusCode,400);
+});
+test('console pagination has non-overlapping stable pages',async t=>{
+ const {api}=await app(t),s=await login(api,owner),a=await request(api,'/api/v1/admin/projects?limit=1&offset=0',s),b=await request(api,'/api/v1/admin/projects?limit=1&offset=1',s);assert.equal(a.json().data.length,1);assert.notEqual(a.json().data[0].id,b.json().data[0].id);
+});
+test('console QA displays validated persisted issue projection, no canonical Website JSON',async t=>{
+ const c=await tenant(),scope={actorId:c.userId,organizationId:c.organizationId,projectId:c.projectId},input=qaInput();input.website.projectId=c.projectId;const run=await repo.startRun(scope);
+ await repo.finishRun(scope,run.id,{success:false,state:{...input.reviewContext,developer:{website:input.website,generatedAt:input.generatedAt},qa:{passed:false,score:40,issues:[{code:'BUSINESS_ALIGNMENT',severity:'error',message:'Content needs review.',recommendation:'Review audience alignment.'}],checkedAt:new Date().toISOString()}}});
+ const {api}=await app(t),s=await login(api,owner),r=await request(api,`/api/v1/admin/qa?workflowId=${run.id}`,s);assert.equal(r.statusCode,200);assert.deepEqual(r.json().data[0].issues,[{code:'BUSINESS_ALIGNMENT',severity:'error',message:'Content needs review.',recommendation:'Review audience alignment.'}]);assert.equal(r.json().data[0].passed,false);assert.ok(!r.body.includes('document'));
+ const usage=await request(api,`/api/v1/admin/usage?projectId=${A.projectId}`,s);assert.equal(usage.json().data[0].input_tokens,null);assert.equal(usage.json().data[0].total_tokens,'30');
+});
+test('all new console read families fail closed on audit write failure',async t=>{
+ const {api}=await app(t),s=await login(api,owner);await pool.query('REVOKE INSERT ON kleo.security_audit_events FROM kleo_api');
+ try{for(const path of ['dashboard','websites','versions','qa','usage','audit-events',`projects/${A.projectId}`]){const r=await request(api,`/api/v1/admin/${path}`,s);assert.equal(r.statusCode,503);assert.equal(r.json().data,undefined);assert.equal(r.json().item,undefined);}}
+ finally{await pool.query('GRANT INSERT ON kleo.security_audit_events TO kleo_api');}
+});
+test('persisted names remain text and credential-looking labels are redacted at console boundary',async t=>{
+ const c=await tenant(),{api}=await app(t),s=await login(api,owner);
+ await pool.query('UPDATE kleo.organizations SET name=$1 WHERE id=$2',['<script>alert(1)</script>',c.organizationId]);
+ const html=await request(api,`/api/v1/admin/organizations/${c.organizationId}`,s);assert.equal(html.json().item.name,'<script>alert(1)</script>');
+ await pool.query('UPDATE kleo.projects SET name=$1 WHERE id=$2',['Bearer '+ 'x'.repeat(32),c.projectId]);
+ const secret=await request(api,`/api/v1/admin/projects/${c.projectId}`,s);assert.equal(secret.json().item.name,'[redacted]');assert.ok(!secret.body.includes('x'.repeat(32)));
+});
