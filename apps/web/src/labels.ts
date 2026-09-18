@@ -14,7 +14,7 @@ const values: Record<string, string> = {
   info: "Информация", warning: "Предупреждение", error: "Ошибка", critical: "Критическая",
   Online: "Доступен", Unavailable: "Недоступно", unavailable: "Недоступно",
   business: "Анализ бизнеса", design: "Дизайн", content: "Контент", developer: "Разработка", qa: "QA",
-  platform_read: "Просмотр администратором", login_success: "Успешный вход", login_failure: "Ошибка входа", access_denied: "Доступ запрещён", project_created: "Создание проекта",
+  platform_read: "Просмотр администратором", login_success: "Успешный вход", login_failure: "Ошибка входа", access_denied: "Доступ запрещён", project_created: "Создание проекта", organization_created: "Создание организации", brief_saved: "Сохранение брифа",
   logout: "Выход", bootstrap_owner: "Создание владельца", identity: "Учётная запись",
   users: "Пользователи", organizations: "Организации", projects: "Проекты", workflows: "Процессы",
 };

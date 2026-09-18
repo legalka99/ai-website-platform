@@ -1,3 +1,4 @@
+import { CreateResource, BriefPage, BriefSummary } from "./owner-forms.js";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Link,
@@ -162,6 +163,9 @@ export function App() {
           {logoutError && <ErrorState error={logoutError} />}
           <Routes>
             <Route path="/admin" element={<Dashboard />} />
+            <Route path="/admin/organizations/new" element={<CreateResource owner={user.platformRole === "platform_owner"} />} />
+            <Route path="/admin/organizations/:organizationId/projects/new" element={<CreateResource project owner={user.platformRole === "platform_owner"} />} />
+            <Route path="/admin/projects/:projectId/brief" element={<BriefPage owner={user.platformRole === "platform_owner"} />} />
             <Route path="/admin/finance" element={<Finance />} />
             <Route path="/admin/settings" element={<Settings user={user} />} />
             {(
@@ -179,7 +183,7 @@ export function App() {
               <Route
                 key={kind}
                 path={`/admin/${kind}`}
-                element={<ListPage key={kind} kind={kind} />}
+                element={<ListPage key={kind} kind={kind} owner={user.platformRole === "platform_owner"} />}
               />
             ))}
             {(["organizations", "users", "projects", "workflows"] as const).map(
@@ -187,7 +191,7 @@ export function App() {
                 <Route
                   key={kind}
                   path={`/admin/${kind}/:id`}
-                  element={<DetailPage key={kind} kind={kind} />}
+                  element={<DetailPage key={kind} kind={kind} owner={user.platformRole === "platform_owner"} />}
                 />
               ),
             )}
@@ -217,7 +221,7 @@ export function App() {
         </main>
         <footer className="footer">
           AiVeron · Панель владельца{" "}
-          <span>Время: {timezone} · Только просмотр</span>
+          <span>Время: {timezone}</span>
         </footer>
       </div>
     </div>
@@ -353,7 +357,7 @@ function Dashboard() {
     </>
   );
 }
-function ListPage({ kind }: { kind: AdminKind }) {
+function ListPage({ kind, owner = false }: { kind: AdminKind; owner?: boolean }) {
   const [params, setParams] = useSearchParams(),
     raw = params.get("offset") ?? "0",
     valid = /^(?:0|[1-9][0-9]{0,3}|10000)$/.test(raw),
@@ -371,12 +375,13 @@ function ListPage({ kind }: { kind: AdminKind }) {
     <>
       <Header
         title={titles[kind]}
+        action={kind === "organizations" && owner ? <Link className="related-action" to="/admin/organizations/new">Создать организацию</Link> : undefined}
         description={
           kind === "usage"
             ? "Сохранённые попытки обращений к ИИ. Неизвестное число токенов не заменяется нулём. Денежный учёт ещё не подключён."
             : kind === "audit-events"
               ? "События входа и административного доступа. Журнал аудита не заменяет мониторинг безопасности."
-              : "Серверная сортировка · до 20 записей на странице · только просмотр."
+              : "Серверная сортировка · до 20 записей на странице."
         }
       />
       {params.size > 0 && (
@@ -422,10 +427,11 @@ function ListPage({ kind }: { kind: AdminKind }) {
   );
 }
 function DetailPage({
-  kind,
+  kind, owner = false,
 }: {
-  kind: "organizations" | "users" | "projects" | "workflows";
+  kind: "organizations" | "users" | "projects" | "workflows"; owner?: boolean;
 }) {
+  const [detailParams] = useSearchParams();
   const { id } = useParams(),
     r = useRemote<AdminDetail>(
       `/api/v1/admin/${kind}/${encodeURIComponent(id ?? "")}`,
@@ -445,7 +451,7 @@ function DetailPage({
               ? "Пользователь"
               : "Подробности")
         }
-        description="Серверные данные записи. Изменения недоступны."
+        description="Сохранённые данные записи и связанные ресурсы."
       />
       {r.error ? (
         <ErrorState error={r.error} retry={r.retry} />
@@ -456,9 +462,14 @@ function DetailPage({
           <section className="panel">
             <Metadata row={r.data.item} />
           </section>
+          {kind === "projects" && <>
+            {detailParams.get("briefSaved") === "1" && <p role="status">Бриф сохранён. Актуальные данные показаны ниже.</p>}
+            <BriefSummary projectId={id!} owner={owner} />
+          </>}
           <nav className="related" aria-label="Связанные данные">
             {kind === "organizations" && (
               <>
+                {owner && <Link to={`/admin/organizations/${id}/projects/new`}>Создать проект</Link>}
                 <Link to={`/admin/projects?organizationId=${id}`}>
                   Проекты организации →
                 </Link>
@@ -542,7 +553,7 @@ function System({ role }: { role: string }) {
           </div>
           <div>
             <dt>Режим панели</dt>
-            <dd>Только просмотр</dd>
+            <dd>{role === "platform_owner" ? "Создание проектов и сохранение брифа" : "Только просмотр"}</dd>
           </div>
           <div>
             <dt>Готовность базы данных</dt>

@@ -1,3 +1,5 @@
+import { createOrganization, createOwnerProject, saveBusinessBrief, getBusinessBrief } from '../../../packages/persistence/src/owner-writes.js';
+import { briefFields } from '../../../packages/core/src/business-brief.js';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { randomUUID,createHash } from 'node:crypto';
@@ -92,6 +94,11 @@ export async function createApi(auth:AuthRepository,config:ApiConfig,options:{ht
   rate('actor',actor.userId,'admin',30);return adminDetail(auth,db,actor,kind,(req.params as {id:string}).id,req.id);
  }));
  app.get('/api/v1/admin/dashboard',{schema:{querystring:emptyQuery}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'admin',30);return adminDashboard(auth,db,actor,req.id);}));
+ const nameBody=object({operationId:id,name:{type:'string',minLength:1,maxLength:200}});
+ app.post('/api/v1/admin/organizations',{schema:{querystring:emptyQuery,body:nameBody}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return createOrganization(db,actor,req.body,req.id);}));
+ app.post('/api/v1/admin/organizations/:organizationId/projects',{schema:{querystring:emptyQuery,params:object({organizationId:id}),body:nameBody}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return createOwnerProject(db,actor,(req.params as {organizationId:string}).organizationId,req.body,req.id);}));
+ app.get('/api/v1/admin/projects/:projectId/brief',{schema:{querystring:emptyQuery,params:object({projectId:id})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'admin',30);return getBusinessBrief(auth,db,actor,(req.params as {projectId:string}).projectId,req.id);}));
+ app.post('/api/v1/admin/projects/:projectId/brief',{bodyLimit:32768,schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({operationId:id,organizationId:id,expectedVersion:{type:'integer',minimum:0,maximum:1000000},brief:object(Object.fromEntries(Object.entries(briefFields).map(([key,f])=>[key,{type:f.required?'string':['string','null'],maxLength:f.max}])))})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return saveBusinessBrief(db,actor,(req.params as {projectId:string}).projectId,req.body,req.id);}));
  // Public registration, role mutation, publishing and AI execution have no routes.
  await app.ready();return app;
 }

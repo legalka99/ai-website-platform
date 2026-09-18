@@ -1,5 +1,9 @@
 # Kleo — модель, защита и постоянное развитие
 
+**Текущий checkpoint: Owner Write MVP.** Владелец может создать организацию, проект и сохранить структурированный бизнес-бриф из Console. PostgreSQL хранит неизменяемые версии брифа. Новые записи разрешены только `platform_owner`; `platform_admin` читает. Статус Sidebar — «Система активна», дизайн и пульс сохранены. AI workflow не запускается. Проверено **1130 PASS / 0 FAIL**: 938 ordinary + 35 persistence + 99 Auth/API + 56 browser + 2 сквозных browser/API/PostgreSQL сценария. Предыдущие checkpoint ниже описывают историю.
+
+Следующий этап: **Workflow Launch + budget controls + status tracking**. Затем Preview → Tilda Integration → Beget staging; порядок deployment можно пересмотреть. Роли сотрудников отложены; требования безопасности перед публичным запуском сохраняются.
+
 Актуализация Owner Console: русский интерфейс и раздел «Финансы» (`/admin/finance`) с сохранённой телеметрией ИИ; денежный учёт пока не подключён. Размер и assets логотипа сохранены. Подробности: [ADMIN-CONSOLE](ADMIN-CONSOLE.md).
 
 **Current checkpoint: AiVeron Owner/Admin Console v1 implemented.** Read-only operational UI and required audited admin read APIs are available; [scope, verification and limitations](ADMIN-CONSOLE.md). Next proposed stage: administrator MFA/recovery/session management before public exposure. RLS, distributed rate limiting, infrastructure hardening and production security gates remain open. No other module was started; following checkpoint statements are historical.

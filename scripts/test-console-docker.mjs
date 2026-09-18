@@ -113,7 +113,7 @@ try {
   for (const name of [
     "kleo-console-dashboard.png",
     "kleo-console-login.png",
-    ...["organizations", "users", "projects", "workflows", "websites", "qa", "usage", "finance", "settings", "employees", "settings-laptop", "audit", "system"].map(name => `kleo-console-${name}.png`),
+    ...["organizations", "users", "projects", "workflows", "websites", "qa", "usage", "finance", "write-brief", "settings", "employees", "settings-laptop", "audit", "system"].map(name => `kleo-console-${name}.png`),
     "kleo-console-local-smoke.png",
   ])
     await exec("docker", [

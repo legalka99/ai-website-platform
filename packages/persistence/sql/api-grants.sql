@@ -16,3 +16,6 @@ GRANT UPDATE(user_id) ON kleo.memberships,kleo.auth_accounts TO kleo_api;
 GRANT SELECT(document) ON kleo.qa_reports TO kleo_api;
 GRANT SELECT(id,organization_id,project_id,workflow_run_id,agent_type,status,created_at) ON kleo.agent_executions TO kleo_api;
 GRANT SELECT(id,actor_id,request_id,event_type,resource_type,resource_id,created_at) ON kleo.security_audit_events TO kleo_api;
+-- Owner input MVP: specific inserts only; no UPDATE/DELETE on immutable input/receipts.
+GRANT INSERT(id,name) ON kleo.organizations TO kleo_api;
+GRANT SELECT,INSERT ON kleo.project_briefs,kleo.owner_commands TO kleo_api;

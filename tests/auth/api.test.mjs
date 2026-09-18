@@ -78,7 +78,7 @@ test('bootstrap owner is explicit singleton, password only Argon2id hash; runtim
  for(const sql of ["UPDATE kleo.platform_roles SET role='platform_owner'","UPDATE kleo.auth_accounts SET password_hash='bad'",'DELETE FROM kleo.auth_sessions','CREATE TABLE kleo.forbidden(id int)',"UPDATE kleo.memberships SET role='owner'"])await assert.rejects(runtime.query(sql),e=>e.code==='42501');
 });
 test('DB failures produce safe errors without upstream messages or SQL',async t=>{const fake={...auth,withSession:async()=>{throw Error('password=PRIVATE SQL /Users/private postgres://secret');}};const {api,logs}=await app(t,{},fake);const r=await request(api,'/api/v1/auth/me',{cookie:'kleo_session='+'a'.repeat(43)});assert.equal(r.statusCode,500);for(const marker of ['PRIVATE','SQL','/Users','postgres://','password'])assert.ok(!r.body.includes(marker)&&!JSON.stringify(logs).includes(marker));});
-test('auth migration replay and checksum protection remain active',async()=>{const migrations=await loadMigrations();await migrate(pool,migrations);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,'2');const changed=migrations.map(m=>m.name.startsWith('002')?{...m,sql:m.sql+'\n-- drift'}:m);await assert.rejects(migrate(pool,changed),e=>e.code==='MIGRATION_MISMATCH');});
+test('auth migration replay and checksum protection remain active',async()=>{const migrations=await loadMigrations();await migrate(pool,migrations);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,'3');const changed=migrations.map(m=>m.name.startsWith('002')?{...m,sql:m.sql+'\n-- drift'}:m);await assert.rejects(migrate(pool,changed),e=>e.code==='MIGRATION_MISMATCH');});
 test('security audit records login/logout and denials without raw email/password/token',async t=>{
  const {api}=await app(t),s=await login(api),denied=await request(api,'/api/v1/admin/users',s),out=await request(api,'/api/v1/auth/logout',{method:'POST',...s,body:{}});
  const rows=(await pool.query('SELECT event_type,request_id,actor_id,resource_type FROM kleo.security_audit_events WHERE request_id=ANY($1::uuid[])',[[s.response.headers['x-request-id'],denied.headers['x-request-id'],out.headers['x-request-id']]])).rows;
@@ -161,4 +161,69 @@ test('persisted names remain text and credential-looking labels are redacted at 
  const html=await request(api,`/api/v1/admin/organizations/${c.organizationId}`,s);assert.equal(html.json().item.name,'<script>alert(1)</script>');
  await pool.query('UPDATE kleo.projects SET name=$1 WHERE id=$2',['Bearer '+ 'x'.repeat(32),c.projectId]);
  const secret=await request(api,`/api/v1/admin/projects/${c.projectId}`,s);assert.equal(secret.json().item.name,'[redacted]');assert.ok(!secret.body.includes('x'.repeat(32)));
+});
+
+const ownerBrief=()=>({companyName:'Owner studio',description:'Furniture design',productsOrServices:'Tables',targetAudience:'Businesses',geography:null,websiteGoals:'Enquiries',advantages:null,desiredActions:'Contact us',contacts:'hello@example.test',notes:null});
+const nameCommand=(name='New client')=>({operationId:randomUUID(),name});
+async function ownerProject(api,s){const o=await request(api,'/api/v1/admin/organizations',{...s,method:'POST',body:nameCommand()});assert.equal(o.statusCode,200);const org=o.json();const p=await request(api,`/api/v1/admin/organizations/${org.id}/projects`,{...s,method:'POST',body:nameCommand('New project')});assert.equal(p.statusCode,200);return {org,project:p.json()};}
+for(const mode of ['anonymous','user','platform_admin'])test(`owner write endpoints reject ${mode}`,async t=>{const {api}=await app(t);let s={};if(mode==='user')s=await login(api);if(mode==='platform_admin'){const c=await tenant();await pool.query("INSERT INTO kleo.platform_roles(user_id,role) VALUES($1,'platform_admin')",[c.userId]);s=await login(api,c);}
+ for(const [path,body] of [['/api/v1/admin/organizations',nameCommand()],[`/api/v1/admin/organizations/${A.organizationId}/projects`,nameCommand()],[`/api/v1/admin/projects/${A.projectId}/brief`,{operationId:randomUUID(),organizationId:A.organizationId,expectedVersion:0,brief:ownerBrief()}]])assert.equal((await request(api,path,{...s,method:'POST',body})).statusCode,mode==='anonymous'?401:403);
+});
+test('owner creates persisted org/project and immutable versioned brief without workflow',async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s),path=`/api/v1/admin/projects/${project.id}/brief`;
+ assert.equal((await request(api,path,s)).json().snapshot,null);
+ const body={operationId:randomUUID(),organizationId:org.id,expectedVersion:0,brief:ownerBrief()},r=await request(api,path,{...s,method:'POST',body});assert.equal(r.statusCode,200);assert.equal(r.json().version,1);
+ const saved=(await request(api,path,s)).json().snapshot;assert.deepEqual(saved.brief,body.brief);assert.equal(saved.organizationId,org.id);assert.equal(saved.projectId,project.id);
+ assert.equal((await pool.query('SELECT count(*) FROM kleo.workflow_runs WHERE project_id=$1',[project.id])).rows[0].count,'0');
+ assert.equal((await pool.query('SELECT count(*) FROM kleo.websites WHERE project_id=$1',[project.id])).rows[0].count,'0');
+ const v2=await request(api,path,{...s,method:'POST',body:{...body,operationId:randomUUID(),expectedVersion:1,brief:{...body.brief,notes:'Second version'}}});assert.equal(v2.statusCode,200);
+ assert.equal((await pool.query('SELECT count(*) FROM kleo.project_briefs WHERE project_id=$1',[project.id])).rows[0].count,'2');
+ const audit=(await pool.query('SELECT * FROM kleo.security_audit_events WHERE request_id=$1',[r.headers['x-request-id']])).rows[0];assert.equal(audit.event_type,'brief_saved');assert.equal(audit.organization_id,org.id);assert.equal(audit.project_id,project.id);assert.ok(!JSON.stringify(audit).includes('hello@example.test'));
+ for(const verb of ['UPDATE','DELETE'])await assert.rejects(pool.query(verb==='UPDATE'?'UPDATE kleo.project_briefs SET version=3 WHERE id=$1':'DELETE FROM kleo.project_briefs WHERE id=$1',[saved.id]),e=>e.code==='23514');
+});
+for(const kind of ['organization','project','brief'])test(`concurrent duplicate ${kind} retries are durable and conflicting payload rejected`,async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s);let path='/api/v1/admin/organizations',body=nameCommand();if(kind==='project')path=`/api/v1/admin/organizations/${org.id}/projects`;if(kind==='brief'){path=`/api/v1/admin/projects/${project.id}/brief`;body={operationId:randomUUID(),organizationId:org.id,expectedVersion:0,brief:ownerBrief()};}
+ const [a,b]=await Promise.all([request(api,path,{...s,method:'POST',body}),request(api,path,{...s,method:'POST',body})]);assert.equal(a.statusCode,200);assert.equal(b.statusCode,200);assert.deepEqual(a.json(),b.json());
+ const conflict=kind==='brief'?{...body,brief:{...body.brief,notes:'Changed'}}:{...body,name:'Changed'};assert.equal((await request(api,path,{...s,method:'POST',body:conflict})).statusCode,409);
+ if(kind==='brief')assert.equal((await request(api,path,{...s,method:'POST',body:{...body,operationId:randomUUID()}})).statusCode,409);
+});
+for(const mode of ['csrf','origin','missing-origin'])test(`owner writes require ${mode}`,async t=>{const {api}=await app(t),s=await login(api,owner);const headers=mode==='origin'?{origin:'https://evil.test'}:mode==='missing-origin'?{origin:''}:{};
+ assert.equal((await request(api,'/api/v1/admin/organizations',{...s,csrf:mode==='csrf'?'invalid':s.csrf,method:'POST',headers,body:nameCommand()})).statusCode,403);
+});
+test('owner targets enforce existence, active state and exact organization/project binding',async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s),path=`/api/v1/admin/projects/${project.id}/brief`,body={operationId:randomUUID(),organizationId:B.organizationId,expectedVersion:0,brief:ownerBrief()};
+ assert.equal((await request(api,path,{...s,method:'POST',body})).statusCode,404);
+ assert.equal((await request(api,`/api/v1/admin/organizations/${randomUUID()}/projects`,{...s,method:'POST',body:nameCommand()})).statusCode,404);
+ await pool.query("UPDATE kleo.organizations SET status='archived' WHERE id=$1",[org.id]);assert.equal((await request(api,path,{...s,method:'POST',body:{...body,organizationId:org.id}})).statusCode,404);
+ assert.equal((await request(api,`/api/v1/admin/organizations/${org.id}/projects`,{...s,method:'POST',body:nameCommand()})).statusCode,404);
+});
+test('owner write audit failure rolls back business write and idempotency receipt',async t=>{const {api}=await app(t),s=await login(api,owner),body=nameCommand('Rollback client');
+ await pool.query("CREATE FUNCTION kleo.fail_owner_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type IN ('organization_created','brief_saved') THEN RAISE EXCEPTION 'TEST_ONLY'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_owner_audit BEFORE INSERT ON kleo.security_audit_events FOR EACH ROW EXECUTE FUNCTION kleo.fail_owner_audit()");
+ try {const r=await request(api,'/api/v1/admin/organizations',{...s,method:'POST',body});assert.equal(r.statusCode,503);assert.ok(!r.body.includes('TEST_ONLY'));assert.equal((await pool.query('SELECT count(*) FROM kleo.organizations WHERE name=$1',[body.name])).rows[0].count,'0');assert.equal((await pool.query('SELECT count(*) FROM kleo.owner_commands WHERE operation_id=$1',[body.operationId])).rows[0].count,'0');}
+ finally{await pool.query('DROP TRIGGER fail_owner_audit ON kleo.security_audit_events; DROP FUNCTION kleo.fail_owner_audit()');}
+ assert.equal((await request(api,'/api/v1/admin/organizations',{...s,method:'POST',body})).statusCode,200);
+});
+for(const body of [{...nameCommand(),role:'platform_owner'},nameCommand(' '),nameCommand('<script>x</script>'),nameCommand('x'.repeat(201)),{...nameCommand(),operationId:'bad'}])test('owner create strict request validation',async t=>{const {api}=await app(t),s=await login(api,owner);assert.equal((await request(api,'/api/v1/admin/organizations',{...s,method:'POST',body})).statusCode,400);});
+test('brief limits, secret rejection and safe read permissions',async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s),path=`/api/v1/admin/projects/${project.id}/brief`,body={operationId:randomUUID(),organizationId:org.id,expectedVersion:0,brief:ownerBrief()};
+ for(const notes of ['<script>alert(1)</script>','-----BEGIN PRIVATE KEY-----','x'.repeat(2001)])assert.equal((await request(api,path,{...s,method:'POST',body:{...body,brief:{...body.brief,notes}}})).statusCode,400);
+ assert.equal((await request(api,path,{...s,method:'POST',body:{...body,brief:{...body.brief,notes:'x'.repeat(40000)}}})).statusCode,413);
+ assert.equal((await request(api,path,await login(api,A))).statusCode,403);
+ const c=await tenant();await pool.query("INSERT INTO kleo.platform_roles(user_id,role) VALUES($1,'platform_admin')",[c.userId]);assert.equal((await request(api,path,await login(api,c))).statusCode,200);
+});
+test('brief FK prevents direct wrong tenant binding and runtime cannot mutate immutable inputs',async t=>{await assert.rejects(pool.query('INSERT INTO kleo.project_briefs(organization_id,project_id,version,actor_id,document) VALUES($1,$2,1,$3,$4)',[A.organizationId,B.projectId,A.userId,JSON.stringify(ownerBrief())]),e=>e.code==='23503');
+ for(const sql of ['DELETE FROM kleo.project_briefs','UPDATE kleo.project_briefs SET version=2','DELETE FROM kleo.owner_commands'])await assert.rejects(runtime.query(sql),e=>e.code==='42501');
+});
+
+test('new migration checksum is protected',async()=>{const migrations=await loadMigrations();await assert.rejects(migrate(pool,migrations.map(m=>m.name.startsWith('003')?{...m,sql:m.sql+'\n-- drift'}:m)),e=>e.code==='MIGRATION_MISMATCH');});
+for(const kind of ['project','brief'])test(`${kind} audit failure leaves no business rows or receipts`,async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s);
+ const event=kind==='project'?'project_created':'brief_saved',path=kind==='project'?`/api/v1/admin/organizations/${org.id}/projects`:`/api/v1/admin/projects/${project.id}/brief`,body=kind==='project'?nameCommand('Rollback project'):{operationId:randomUUID(),organizationId:org.id,expectedVersion:0,brief:ownerBrief()};
+ await pool.query(`CREATE FUNCTION kleo.fail_write_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type = '${event}' THEN RAISE EXCEPTION 'TEST_ONLY'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_write_audit BEFORE INSERT ON kleo.security_audit_events FOR EACH ROW EXECUTE FUNCTION kleo.fail_write_audit()`);
+ try{assert.equal((await request(api,path,{...s,method:'POST',body})).statusCode,503);assert.equal((await pool.query('SELECT count(*) FROM kleo.owner_commands WHERE operation_id=$1',[body.operationId])).rows[0].count,'0');if(kind==='brief')assert.equal((await pool.query('SELECT count(*) FROM kleo.project_briefs WHERE project_id=$1',[project.id])).rows[0].count,'0');else assert.equal((await pool.query("SELECT count(*) FROM kleo.projects WHERE organization_id=$1 AND name='Rollback project'",[org.id])).rows[0].count,'0');}
+ finally{await pool.query('DROP TRIGGER fail_write_audit ON kleo.security_audit_events; DROP FUNCTION kleo.fail_write_audit()');}
+});
+test('nested project/brief writes require CSRF and Origin independently',async t=>{const {api}=await app(t),s=await login(api,owner);
+ for(const [path,body] of [[`/api/v1/admin/organizations/${A.organizationId}/projects`,nameCommand()],[`/api/v1/admin/projects/${A.projectId}/brief`,{operationId:randomUUID(),organizationId:A.organizationId,expectedVersion:0,brief:ownerBrief()}]]){
+ assert.equal((await request(api,path,{...s,csrf:'',method:'POST',body})).statusCode,403);assert.equal((await request(api,path,{...s,method:'POST',body,headers:{origin:'https://evil.test'}})).statusCode,403);
+ }
+});
+test('names are not globally unique and archived project cannot accept new brief',async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s);
+ const a=await request(api,'/api/v1/admin/organizations',{...s,method:'POST',body:nameCommand(org.name)});assert.equal(a.statusCode,200);assert.notEqual(a.json().id,org.id);
+ await pool.query("UPDATE kleo.projects SET status='archived' WHERE id=$1",[project.id]);assert.equal((await request(api,`/api/v1/admin/projects/${project.id}/brief`,{...s,method:'POST',body:{operationId:randomUUID(),organizationId:org.id,expectedVersion:0,brief:ownerBrief()}})).statusCode,404);
 });

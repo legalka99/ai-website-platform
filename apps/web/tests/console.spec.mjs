@@ -469,7 +469,7 @@ test("dark tokens keep normal text and status labels above WCAG AA contrast", as
 test("Russian navigation and read-only label below the unchanged logo", async ({ page }) => {
   await mock(page);
   await page.goto("/admin");
-  await expect(page.locator(".sidebar-mode")).toHaveText("Только просмотр");
+  await expect(page.locator(".sidebar-mode")).toHaveText("Система активна");
   expect(await page.locator(".sidebar-mode").evaluate(el => {
     const logo = document.querySelector(".sidebar .brand-logo");
     return el.previousElementSibling?.classList.contains("brand") && el.getBoundingClientRect().top >= logo.getBoundingClientRect().bottom;
@@ -565,7 +565,7 @@ test("console indicator respects reduced motion and retains its text meaning", a
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/admin");
   await expect(page.locator(".console-indicator")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator(".sidebar-mode")).toHaveText("Только просмотр");
+  await expect(page.locator(".sidebar-mode")).toHaveText("Система активна");
   await expect(page.locator(".console-indicator")).toHaveCSS("animation-name", "console-pulse");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(page.locator(".console-indicator")).toHaveCSS("animation-name", "none");
@@ -644,4 +644,21 @@ test("sidebar groups have visible separation and account role has its own surfac
   expect(account.settingsTop - account.bottom).toBeGreaterThanOrEqual(10);
   await expect(page.locator(".nav-group").last()).toBeInViewport();
   await expect(page.getByRole("link", { name: "Настройки", exact: true })).toBeInViewport();
+});
+
+test('only owner can see organization create action and direct create route',async({page})=>{
+ await mock(page,{role:'platform_admin'});await page.goto('/admin/organizations');await expect(page.locator('tbody tr')).toHaveCount(1);await expect(page.getByRole('link',{name:'Создать организацию',exact:true})).toHaveCount(0);
+ await page.goto('/admin/organizations/new');await expect(page.getByRole('heading',{name:'Доступ запрещён'})).toBeVisible();await expect(page.locator('main input')).toHaveCount(0);
+});
+test('create form blocks duplicate submit and reuses operation ID after uncertain failure',async({page})=>{
+ await mock(page);const bodies=[];
+ await page.route('http://localhost:3001/api/v1/admin/organizations',async route=>{
+  if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'http://localhost:3000','access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'POST'}});
+  bodies.push(route.request().postDataJSON());expect(route.request().headers()['x-csrf-token']).toBe('TEST_ONLY_CSRF');
+  await new Promise(resolve=>setTimeout(resolve,100));return route.fulfill({status:503,contentType:'application/json',headers:{'access-control-allow-origin':'http://localhost:3000','access-control-allow-credentials':'true'},body:JSON.stringify({message:'PRIVATE_SQL_ERROR'})});
+ });
+ await page.goto('/admin/organizations/new');await page.getByLabel('Название организации').fill('Клиент');await page.locator('form').evaluate(form=>{form.requestSubmit();form.requestSubmit();});
+ await expect(page.getByRole('alert')).toContainText('Не удалось создать организацию');expect(bodies).toHaveLength(1);await expect(page.getByRole('alert')).toBeFocused();
+ await page.getByRole('button',{name:'Создать организацию',exact:true}).click();await expect(page.getByRole('button',{name:'Создать организацию',exact:true})).toBeEnabled();expect(bodies).toHaveLength(2);expect(bodies[0].operationId).toBe(bodies[1].operationId);
+ await expect(page.locator('body')).not.toContainText('PRIVATE_SQL_ERROR');await expect(page.getByLabel('Название организации')).toHaveValue('Клиент');
 });

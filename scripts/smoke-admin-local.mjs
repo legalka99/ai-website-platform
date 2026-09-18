@@ -91,6 +91,17 @@ try {
     child.on("error", () => resolve(1));
     child.on("exit", (code) => resolve(code ?? 1));
   });
+  if (!inspect && process.exitCode === 0) {
+    // Fresh HTTP server per independent smoke; production rate limits stay unchanged.
+    await api.close();
+    api = await createApi(await AuthRepository.create(runtime, 3600), {
+      production: false, apiOrigin: "http://localhost:3001", origins: ["http://localhost:3000"], sessionSeconds: 3600, loginLimit: 10,
+    });
+    await api.listen({ host: "127.0.0.1", port: 3001 });
+    const writeChild = spawn("npm", ["run", "test:web"], { stdio: "inherit", env: { ...process.env, KLEO_CONSOLE_LIVE: "1", KLEO_CONSOLE_WRITE: "1" } });
+    process.exitCode = await new Promise(resolve => { writeChild.on("error", () => resolve(1)); writeChild.on("exit", code => resolve(code ?? 1)); });
+  }
+
 } catch {
   console.error("Isolated console smoke failed; sensitive details omitted.");
   process.exitCode = 1;

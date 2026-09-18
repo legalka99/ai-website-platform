@@ -1,5 +1,9 @@
 # AiVeron Owner/Admin Console v1
 
+**Текущий checkpoint: Owner Write MVP.** Владелец может создать организацию, проект и сохранить структурированный бизнес-бриф из Console. PostgreSQL хранит неизменяемые версии брифа. Новые записи разрешены только `platform_owner`; `platform_admin` читает. Статус Sidebar — «Система активна», дизайн и пульс сохранены. AI workflow не запускается. Проверено **1130 PASS / 0 FAIL**: 938 ordinary + 35 persistence + 99 Auth/API + 56 browser + 2 сквозных browser/API/PostgreSQL сценария. Предыдущие checkpoint ниже описывают историю.
+
+Следующий этап: **Workflow Launch + budget controls + status tracking**. Затем Preview → Tilda Integration → Beget staging; порядок deployment можно пересмотреть. Роли сотрудников отложены; требования безопасности перед публичным запуском сохраняются.
+
 Base: clean `main`, `efb1bd6` (`feat: add auth api tenant foundation`). Previous checkpoint: 1002 tests. This is a read-only operational UI, except login/logout. No deployment, DNS changes, public registration, client cabinet, editing, publishing, role writes or AI execution. Kleo package names/imports remain unchanged.
 
 ## Stack and maintenance
@@ -237,3 +241,48 @@ Branding-only file delta over the pre-existing uncommitted Console:
 Проверки Sidebar/Settings: **1077 PASS / 0 FAIL**, baseline 1069. 913 основных tests, 35 PostgreSQL persistence, 75 Auth/API PostgreSQL, 53 браузерных и 1 browser → API → PostgreSQL smoke. Добавлены 8 проверок: группы/порядок/роль/email, reduced motion, профили обеих платформенных ролей, честное состояние сотрудников, отказ ordinary user, безопасный вывод профиля и отсутствие лишних полей, доступность меню на 1440×900/1024×700/768×600/500×800. Сохранены прежние logo/XSS/finance/auth assertions. Typecheck, production build, security/secret scan, bundle scan, git diff check — PASS. Визуально проверены профиль/сотрудники на 1440×900 и 1024×700; скриншоты вне репозитория и сборки, только одноразовые test fixtures.
 
 Файлы этапа: новые `apps/web/src/sidebar.tsx` и `settings.tsx`; обновлены `app.tsx`, `style.css`, оба browser test файла, screenshot copy list в `scripts/test-console-docker.mjs`, README, ADMIN-CONSOLE, SPEC и DEVELOPMENT-PLAN. Новых зависимостей, API endpoints, migrations и изменений backend/security/brand assets нет. Actual .env не изменён и игнорируется. Live AI calls: none. Commit: none.
+
+## Owner Write MVP — контракт и хранение
+
+База: `main`, `075f09c`, исходное дерево чистое; baseline 1078. Новых зависимостей нет.
+
+Organization → Project → Business Brief. Существующие organizations/projects, статусы, AuthRepository и BusinessProfile остаются без замены. Новая migration `003_owner_inputs.sql` нужна, поскольку старые snapshots привязаны к workflow, а пользовательское задание существует до его запуска. `project_briefs` хранит immutable версии с server UUID, actor, timestamp, organization/project composite FK и уникальной парой project/version. `owner_commands` хранит immutable квитанции идемпотентности: actor + operationId, hash нормализованного запроса и небольшой результат. Старые migrations не изменены.
+
+Бриф — user input, не Business Agent output. Поля: companyName (200), description (2000), productsOrServices (1500), targetAudience (1000), geography (500), websiteGoals (1000), advantages (1500), desiredActions (500), contacts (1000), notes (2000). Числа — максимальная длина строки. Обязательны companyName, description, productsOrServices, targetAudience, websiteGoals, desiredActions. Все ключи присутствуют; необязательная пустая строка нормализуется в null. Products/audience/goals/actions здесь являются текстом пользователя; будущий адаптер явно преобразует их в массивы BusinessProfile/вход агента. Отрасль не выдумывается.
+
+| Endpoint | Request | Response |
+|---|---|---|
+| POST /api/v1/admin/organizations | operationId UUIDv4, name | id, name, status, created_at |
+| POST /api/v1/admin/organizations/:organizationId/projects | operationId, name | id, organization_id, name, status, created_at |
+| POST /api/v1/admin/projects/:projectId/brief | operationId, organizationId, expectedVersion, brief | id, projectId, organizationId, version |
+| GET /api/v1/admin/projects/:projectId/brief | path UUID | snapshot: null либо id, organizationId, projectId, version, createdAt, brief |
+
+POST выбран для добавления версии: существующие CSRF/CORS правила не расширяются. expectedVersion=0 для первого сохранения; stale version → 409. UUID, timestamps и active status назначает сервер. Название trim, required, максимум 200; одинаковые названия допустимы. Unknown/missing keys и неверные типы отвергаются, включая status/role/id в create body. Бриф ограничен 32768 байт на HTTP и 24576 байт нормализованного JSON; create payload ограничен общим 8192-byte лимитом. Все поля ограничены отдельно.
+
+Только platform_owner пишет; platform_admin может читать бриф, ordinary roles получают 403 на эти admin endpoints. Старый tenant POST /projects не изменён и сохраняет прежнюю policy. Новый owner path не создаёт поддельные memberships. Frontend скрывает кнопки, но сервер независимо проверяет актуального actor. Проверяются active organization/project и соответствие вложенности. Неизвестные/архивные/неверно вложенные targets → 404. Нет generic object/table writes.
+
+Session + CSRF + допустимый Origin обязательны для POST. Owner writes ограничены 20/min на actor, brief reads — существующим admin лимитом 30/min. Parameterized SQL и row locks защищают scope/version, advisory transaction lock защищает actor/operationId. Повтор того же ключа и нормализованного payload возвращает тот же результат; другой payload → 409. Frontend блокирует double submit сразу и сохраняет operationId для ручного повтора неизменённого payload после неизвестного результата; автоматических повторов нет. Receipt не содержит полный бриф. Retention receipts пока не реализован, нужен отдельный operational policy.
+
+Write + audit + receipt фиксируются одной authenticated транзакцией. Audit failure откатывает всё; события organization_created, project_created, brief_saved содержат actor/requestId/resource/organization/project/time, без текста брифа и контактов. Brief event ссылается на project. DB failures → безопасный UNAVAILABLE, без SQL/stack/raw body. Существующие session expiry/revocation и transaction timeouts сохранены.
+
+Новые runtime grants: INSERT(id,name) organizations; SELECT,INSERT project_briefs/owner_commands. Нет нового DELETE, DDL или UPDATE содержимого. На существующей базе оператор применяет migration и только новые GRANT statements из конца api-grants.sql; весь файл с CREATE ROLE повторно выполнять не следует. Тесты используют отдельные disposable databases, рабочая база автоматически не мигрировалась.
+
+Текст только escaped React rendering; HTML delimiters/control characters, опасные URL schemes, распознаваемые secrets/credential URLs и явно помеченные password/banking fields отвергаются. Публичные телефон/email/http(s)/messenger контакты разрешены как неактивный текст. Это не универсальный детектор любого произвольного секрета: форма явно запрещает ввод паролей, ключей и банковских данных. Payload не пишется в logs/audit. Никаких provider credentials во frontend.
+
+## Owner UX и дальнейшая связь с workflow
+
+Организации → Создать организацию → карточка → Создать проект → карточка → Заполнить бриф. Форма содержит десять подписанных полей, required/maxlength, подсказки; optional blank сохраняется как null. Loading блокирует повторный submit, ошибки связаны с полями и получают focus, значения не теряются. Успех возвращает в карточку проекта. Карточка показывает заполненность, версию, значения и владельцу кнопку редактирования; повторное сохранение создаёт новую версию. Нет autosave, истории версий в UI и предупреждения о несохранённых изменениях.
+
+Sidebar/лого/тема/роль/пульс сохранены; заменён только текст статуса на «Система активна». В будущем область может показывать system health, active clients/subscriptions; сейчас эти показатели не имитируются. Finance/Settings не расширены.
+
+Следующий этап должен привязать WorkflowRun к точному immutable brief id с organization/project composite FK. Запуск обязан отдельно авторизовать owner и scope: нельзя подделывать membership или обходить существующие scoped repositories. Адаптер user brief → validated BusinessAgent input должен явно нормализовать scalar/array различия, передавать пользовательский текст как недоверенные данные и не превращать контакты в credentials/tools. После запуска цепочка: Brief version → WorkflowRun → BusinessProfile → Website → QA. В этом этапе binding и запуск не реализованы.
+
+## Проверка Owner Write MVP
+
+1130 PASS / 0 FAIL: 938 ordinary, 35 PostgreSQL persistence, 99 PostgreSQL auth/API, 56 browser, 2 real browser/API/PostgreSQL smoke. Browser write smoke проходит owner login → organization → project → brief → refresh → повторное сохранение версии → logout → ordinary user denied. Это автоматизированный реальный браузер с изолированной test DB, не live AI и не production data.
+
+Покрыты unknown/oversized/empty/type/UUID validation, CSRF/Origin, owner/admin/user authorization, scope/archived resources, idempotency same/conflicting payload, concurrent submits, version conflict, immutable rows, composite FK, minimal runtime grants, audit fail-closed rollback для всех трёх writes, migration replay/checksum/rollback, безопасные UI errors и сохранение полей.
+
+Новые файлы: core/business-brief.ts; persistence/owner-validation.ts, owner-writes.ts, migrations/003_owner_inputs.sql; web/owner-forms.tsx; tests/owner-input.test.mjs; web/tests/write-smoke.spec.mjs (пути src у исходников). Изменены API server, web app/sidebar/labels/styles/console tests/Playwright config, persistence grants, auth/persistence tests, local/docker smoke harness и README/SPEC/PLAN/эта документация.
+
+AI calls, generation, preview, Tilda, billing, deployment и commit: none. Production readiness не заявляется.

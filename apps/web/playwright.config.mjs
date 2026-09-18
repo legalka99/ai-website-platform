@@ -3,7 +3,7 @@ export default defineConfig({
   testDir: "tests",
   testMatch:
     process.env.KLEO_CONSOLE_LIVE === "1"
-      ? "local-smoke.spec.mjs"
+      ? (process.env.KLEO_CONSOLE_WRITE === "1" ? "write-smoke.spec.mjs" : "local-smoke.spec.mjs")
       : "console.spec.mjs",
   fullyParallel: false,
   workers: 1,

@@ -11,7 +11,7 @@ export const navigationGroups = [
 
 /** Local console availability, not a claim about server health or business metrics. */
 export function ConsoleStatus() {
-  return <p className="sidebar-mode"><span className="console-indicator" aria-hidden="true" />Только просмотр</p>;
+  return <p className="sidebar-mode"><span className="console-indicator" aria-hidden="true" />Система активна</p>;
 }
 export function SidebarNavigation() {
   return <nav className="grouped-navigation" aria-label="Основная навигация">
