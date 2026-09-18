@@ -20,7 +20,7 @@ test('migration checksum mismatch fails safely',async()=>{
  const list=await loadMigrations();await assert.rejects(migrate(pool,list.map((m,i)=>i===0?{...m,sql:m.sql+'\n-- changed'}:m)),e=>e.code==='MIGRATION_MISMATCH');
 });
 test('failed migration rolls back DDL and migration record atomically',async()=>{
- await assert.rejects(migrate(pool,[...await loadMigrations(),{name:'004_failure.sql',sql:'CREATE TABLE kleo.rollback_probe(id int); SELECT missing_function();'}]),e=>e.code==='DATABASE_FAILURE');
+ await assert.rejects(migrate(pool,[...await loadMigrations(),{name:'006_failure.sql',sql:'CREATE TABLE kleo.rollback_probe(id int); SELECT missing_function();'}]),e=>e.code==='DATABASE_FAILURE');
  assert.equal((await pool.query("SELECT to_regclass('kleo.rollback_probe') AS table")).rows[0].table,null);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,String((await loadMigrations()).length));
 });
 test('completed workflow stores snapshots, immutable draft, exact QA version and audit',async()=>{
@@ -126,4 +126,64 @@ test('restricted runtime role performs workflow operations but cannot delete, pr
 });
 test('JSON null cannot bypass SQL Website ownership consistency',async()=>{
  const a=await complete(),run=await repo.startRun(a.scope);await assert.rejects(pool.query('INSERT INTO kleo.website_versions(organization_id,project_id,website_id,workflow_run_id,version_number,document) VALUES($1,$2,$3,$4,2,$5)',[a.scope.organizationId,a.scope.projectId,a.stored.websiteId,run.id,JSON.stringify({...a.value.state.developer.website,id:a.stored.websiteId,projectId:null})]),e=>e.code==='23514');
+});
+
+// Agent failure codes cross the real orchestrator and PostgreSQL boundary; no provider network.
+for(const stage of ['design','developer','qa'])test(`${stage} INVALID_RESPONSE persists while completed executions keep null error_code`,async()=>{
+ const {WebsiteWorkflowOrchestrator}=await import('../../.test-build/packages/ai/src/orchestrator/website-workflow-orchestrator.js');
+ const s=await tenant(),outputs=result(s).state;
+ const agents=Object.fromEntries(['business','design','content','developer','qa'].map(type=>[type,{type,async run(){return type===stage?{success:false,errorCode:'INVALID_RESPONSE',error:'Ignored untrusted details',execution:{projectId:s.projectId,goal:'Create draft',routing:{attempts:[{provider:'openai',model:'test',outcome:'success',usage:{provider:'openai',model:'test',totalTokens:30}}]}}}:{success:true,output:outputs[type]};}}]));
+ async function createRunner(runId){
+ if(stage==='design'){
+  const {DefaultDesignAgent}=await import('../../.test-build/packages/ai/src/agents/default-design-agent.js');
+  const {AIRouter}=await import('../../.test-build/packages/ai/src/router/ai-router.js');
+  const {readRouterPolicy,textCapabilities}=await import('../../.test-build/packages/ai/src/router/policy.js');
+  const {FakeProvider}=await import('../../.test-build/packages/ai/src/providers/fake-provider.js');
+  const provider=new FakeProvider(()=>({content:'{}',structured:{},model:'test',usageRecord:{provider:'openai',model:'test',totalTokens:30,timestamp:new Date().toISOString()}}));
+  const {GuardedAIProvider}=await import('../../.test-build/packages/ai/src/services/guarded-provider.js');
+  const {AuthorizationPolicy}=await import('../../.test-build/packages/security/src/authorization.js');
+  const {AICostGuard}=await import('../../.test-build/packages/security/src/rate-limit.js');
+  const context={...s,workflowId:runId,actor:{id:s.actorId,authenticated:true}};
+  const guarded=new GuardedAIProvider(provider,context,new AuthorizationPolicy([{...s,role:'owner'}]),new AICostGuard(),1000,'design');
+  agents.design=new DefaultDesignAgent(new AIRouter([{metadata:{id:'openai',model:'test',capabilities:textCapabilities(1000)},provider:guarded}],readRouterPolicy({}),'design'));
+ }
+ return new WebsiteWorkflowOrchestrator(agents);
+ }
+ const finished=await runPersistedWorkflow(repo,s,{goal:'Create draft',input:{companyName:'Example'}},createRunner);
+ assert.deepEqual(finished.result.stageError,{stage,errorCode:'INVALID_RESPONSE'});
+ const details=await repo.getRunDetails(s,finished.stored.id);
+ assert.equal(details.executions.find(e=>e.agent_type===stage).error_code,'INVALID_RESPONSE');
+ assert.ok(details.executions.filter(e=>e.status==='completed').every(e=>e.error_code===null));
+ assert.equal(details.usage[0].outcome,'success');assert.equal(details.usage[0].total_tokens,'30');
+ assert.equal((await pool.query('SELECT failure_code FROM kleo.workflow_runs WHERE id=$1',[finished.stored.id])).rows[0].failure_code,'WORKFLOW_FAILED');
+});
+for(const errorCode of ['NEW_UNKNOWN_CODE','private field value','INVALID_RESPONSE\nprivate','toString',null])test('persistence independently rejects non-allowlisted stage code '+JSON.stringify(errorCode),async()=>{
+ const s=await tenant(),run=await repo.startRun(s);await repo.finishRun(s,run.id,{success:false,state:{business:result(s).state.business},stageError:{stage:'design',errorCode},error:'Ignored private message'});
+ const rows=(await repo.getRunDetails(s,run.id)).executions;assert.equal(rows.find(e=>e.agent_type==='design').error_code,'STAGE_FAILED');assert.equal(rows.find(e=>e.agent_type==='business').error_code,null);
+});
+test('stage mismatch cannot attach a code to another failed stage; legacy fallback stays idempotent',async()=>{
+ const s=await tenant(),run=await repo.startRun(s),legacy={success:false,state:{business:result(s).state.business}};
+ const stored=await repo.finishRun(s,run.id,legacy);
+ assert.deepEqual(await repo.finishRun(s,run.id,{...legacy,stageError:{stage:'qa',errorCode:'INVALID_RESPONSE'}}),stored);
+ assert.equal((await repo.getRunDetails(s,run.id)).executions.find(e=>e.agent_type==='design').error_code,'STAGE_FAILED');
+});
+test('completed and semantic QA failure do not gain diagnostic codes',async()=>{
+ const s=await tenant(),run=await repo.startRun(s);await repo.finishRun(s,run.id,{...result(s,false),stageError:{stage:'qa',errorCode:'INVALID_RESPONSE'}});
+ assert.ok((await repo.getRunDetails(s,run.id)).executions.every(e=>e.error_code===null));
+});
+test('stage diagnostic SQL constraint matches allowlist and rejects arbitrary text',async()=>{
+ const {STAGE_ERROR_CODES}=await import('../../.test-build/packages/ai/src/contracts/stage-error.js');
+ const sql=(await loadMigrations()).find(m=>m.name.startsWith('005_')).sql;
+ assert.deepEqual([...sql.matchAll(/'([A-Z_]+)'/g)].map(m=>m[1]).sort(),['STAGE_FAILED',...STAGE_ERROR_CODES].sort());
+ const s=await tenant(),run=await repo.startRun(s);
+ await assert.rejects(pool.query("INSERT INTO kleo.agent_executions(organization_id,project_id,workflow_run_id,agent_type,status,error_code) VALUES($1,$2,$3,'business','failed',$4)",[s.organizationId,s.projectId,run.id,'untrusted details']),e=>e.code==='23514');
+});
+test('deferred migration 006 remains unapplied and four Content attempts fail atomically',async()=>{
+ const s=await tenant(),run=await repo.startRun(s),r=result(s);
+ r.executions={content:{projectId:s.projectId,goal:'PRIVATE_PROMPT',routing:{attempts:Array.from({length:4},(_,i)=>({provider:i%2?'yandex':'openai',model:'test-model',outcome:i%2?'success':'failure',usage:{...s,workflowId:run.id,agentType:'content',provider:i%2?'yandex':'openai',model:'test-model',totalTokens:10,requestId:`content-call-${i}`,raw:'PRIVATE_RESPONSE'}}))}}};
+ await assert.rejects(repo.finishRun(s,run.id,r),e=>e.code==='CONFLICT');
+ const d=await repo.getRunDetails(s,run.id);
+ assert.equal(d.usage.length,0);assert.equal(d.run.status,'running');
+ assert.equal((await pool.query("SELECT count(*) FROM kleo.schema_migrations WHERE name='006_content_correction_usage.sql'")).rows[0].count,'0');
+ assert.ok(!JSON.stringify(d).includes('PRIVATE_'));
 });

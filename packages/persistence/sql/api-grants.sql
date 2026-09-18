@@ -19,3 +19,9 @@ GRANT SELECT(id,actor_id,request_id,event_type,resource_type,resource_id,created
 -- Owner input MVP: specific inserts only; no UPDATE/DELETE on immutable input/receipts.
 GRANT INSERT(id,name) ON kleo.organizations TO kleo_api;
 GRANT SELECT,INSERT ON kleo.project_briefs,kleo.owner_commands TO kleo_api;
+
+-- Owner workflow runner: scoped server composition; immutable outputs remain insert-only.
+GRANT INSERT ON kleo.workflow_runs,kleo.websites,kleo.website_versions,kleo.qa_reports,kleo.domain_snapshots,kleo.agent_executions,kleo.ai_usage,kleo.audit_events TO kleo_api;
+GRANT UPDATE(status,result_digest,completed_at,failure_code,current_stage) ON kleo.workflow_runs TO kleo_api;
+GRANT SELECT ON kleo.audit_events TO kleo_api;
+GRANT SELECT(error_code) ON kleo.agent_executions TO kleo_api;

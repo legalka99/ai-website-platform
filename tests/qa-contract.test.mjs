@@ -1,3 +1,4 @@
+import {confirmed} from './fixtures/confirmed-facts.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { qaInput,qaWire,qaIssue } from './fixtures/qa.mjs';
@@ -49,7 +50,7 @@ for(const text of ['Высокое качество','Гарантия 5 лет'
  const i=qaInput();i.reviewContext.content.sections[0].text=text;i.website.pages[0].blocks[0].content.text=text;assert.equal(deterministicQA(snapshotQAInput(i),'project-1')[0].code,'UNGROUNDED_CLAIM');
 });
 test('confirmed claim passes deterministic grounding',()=>{
- const i=qaInput();i.reviewContext.businessFacts=['Гарантия 5 лет'];i.reviewContext.content.sections[0].text='Гарантия 5 лет';i.website.pages[0].blocks[0].content.text='Гарантия 5 лет';assert.deepEqual(deterministicQA(snapshotQAInput(i),'project-1'),[]);
+ const i=qaInput();i.reviewContext.confirmedBusinessFacts=confirmed({advantages:'Гарантия 5 лет'});i.reviewContext.content.sections[0].text='Гарантия 5 лет';i.website.pages[0].blocks[0].content.text='Гарантия 5 лет';assert.deepEqual(deterministicQA(snapshotQAInput(i),'project-1'),[]);
 });
 test('deterministic Design/SEO warnings survive model PASS and do not mutate Website',()=>{
  const i=qaInput();delete i.website.pages[0].seo;i.website.designSystem.colors.primary='#123456';const before=structuredClone(i),findings=deterministicQA(snapshotQAInput(i),'project-1');assert.deepEqual(findings.map(i=>i.code),['DESIGN_MISMATCH','SEO_INVALID']);

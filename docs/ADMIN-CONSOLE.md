@@ -1,5 +1,9 @@
 # AiVeron Owner/Admin Console v1
 
+**Текущий checkpoint: Owner Workflow Launch MVP.** Из Console владелец запускает существующий Business → Design → Content → Developer → QA pipeline по точной immutable версии брифа. Запуск синхронный, управляемый API-запросом: без очереди, фоновых необслуживаемых Promise и автоматического resume. Записи процесса/этапов/usage переживают обновление браузера; при падении API требуется операторская проверка незавершённого run. Owner-only, CSRF/Origin, идемпотентность, запрет параллельного owner run в проекте, общий server-owned output-token budget. Подробный контракт и ограничения: [ADMIN-CONSOLE](ADMIN-CONSOLE.md#owner-workflow-launch-mvp).
+
+Следующий отдельный этап — **Website Preview**. Preview, Tilda, monetary Cost Accounting и deployment сейчас не реализуются. Исторические checkpoint ниже сохраняются как история.
+
 **Текущий checkpoint: Owner Write MVP.** Владелец может создать организацию, проект и сохранить структурированный бизнес-бриф из Console. PostgreSQL хранит неизменяемые версии брифа. Новые записи разрешены только `platform_owner`; `platform_admin` читает. Статус Sidebar — «Система активна», дизайн и пульс сохранены. AI workflow не запускается. Проверено **1130 PASS / 0 FAIL**: 938 ordinary + 35 persistence + 99 Auth/API + 56 browser + 2 сквозных browser/API/PostgreSQL сценария. Предыдущие checkpoint ниже описывают историю.
 
 Следующий этап: **Workflow Launch + budget controls + status tracking**. Затем Preview → Tilda Integration → Beget staging; порядок deployment можно пересмотреть. Роли сотрудников отложены; требования безопасности перед публичным запуском сохраняются.
@@ -286,3 +290,72 @@ Sidebar/лого/тема/роль/пульс сохранены; заменён
 Новые файлы: core/business-brief.ts; persistence/owner-validation.ts, owner-writes.ts, migrations/003_owner_inputs.sql; web/owner-forms.tsx; tests/owner-input.test.mjs; web/tests/write-smoke.spec.mjs (пути src у исходников). Изменены API server, web app/sidebar/labels/styles/console tests/Playwright config, persistence grants, auth/persistence tests, local/docker smoke harness и README/SPEC/PLAN/эта документация.
 
 AI calls, generation, preview, Tilda, billing, deployment и commit: none. Production readiness не заявляется.
+
+## Owner Workflow Launch MVP
+
+База `main`, `9bc48d4` (owner project creation and business brief), исходное дерево чистое, baseline **1130**. Изменения не закоммичены, actual .env не читается и не меняется этим implementation/test flow. Новых зависимостей нет. Проверка с fake providers не доказывает качество live моделей.
+
+### Application boundary и execution model
+
+Console → launch HTTP endpoint → prepareOwnerWorkflow в authenticated transaction → awaited WorkflowLaunchService.execute → **runPersistedWorkflow** → существующий WebsiteWorkflowOrchestrator → существующие routed services / AIRouter / GuardedAIProvider. Business, Design, Content, Developer, QA сохраняют validation/grounding и fallback policy. Исправлена передача существующего AbortSignal из Business Agent провайдеру. Отдельного workflow engine нет.
+
+**Controlled synchronous, process-bound execution.** POST ожидает завершения; DB transaction освобождается до AI. Socket timeout для этого запроса повышается до общего deadline + 30s. Общий signal ограничивает pipeline 10 минутами, timeout адаптера ограничен 60s; Provider/Router cancellation запрещает fallback и дальнейшие stages. Graceful shutdown API ожидает активные запросы. Закрытие вкладки/разрыв HTTP не является cancel: сервер продолжает уже принятый запуск до результата/deadline, пока API process жив.
+
+Это НЕ durable queue/worker: queue/Redis/BullMQ/Temporal не добавлены. При process kill, host crash или terminal persistence failure сохранённый run может остаться running. Начатый stage и уже сохранённые completed executions/usage остаются; snapshot/Website/QA финализируются существующей terminal transaction. Незавершённый текущий provider attempt может не иметь сохранённого usage после crash — это не нулевая стоимость. После deadline UI сообщает о необходимости проверки сервера и останавливает polling. Автоматического restart/resume/retry или пометки «успешно» нет. Такой run блокирует новый запуск проекта до отдельной операторской reconciliation, проверяющей остановку прежнего API и возможные внешние расходы; автоматическая recovery-команда в этом MVP отсутствует. Для public deployment нужны durable execution/recovery и distributed budget policy.
+
+### Binding и migration 004
+
+`workflow_runs.source_brief_version_id` с composite FK organization/project/brief id навсегда указывает на immutable `project_briefs`. Сохранены server request_id, deadline_at и current_stage. Transition trigger запрещает замену source/actor/scope/deadline/request provenance. Migration 001/002/003 неизменны; 004 forward-only, transactional, replay/checksum-tested.
+
+Исходный WorkflowRun actor был обязан иметь membership. Для owner launch это не обходится созданием фиктивного member: actor ссылается на users, owner source проверяет DB-trigger platform_owner/active user, а legacy tenant actor сохраняет composite membership FK через generated tenant_actor_id. Поэтому прежнее запрещение удаления membership с историческими runs сохранено. Audit actor связан composite FK с actor соответствующего run.
+
+Scoped PostgresPersistence continuation привязана к одному уже разрешённому owner run и точному actor/organization/project. Она не создаёт новые tenant permissions, не расширяет обычный repository default. Принятый запуск может завершить фиксацию usage/результата после последующей смены роли/архивирования: это continuation уже разрешённого действия, не новая launch authorization. Новые launches всегда заново проверяют session/role/active resources. OwnerGenerationPolicy разрешает только generate в одном scope; не publish/delete/manage_credentials и не произвольные tenant reads.
+
+Server conversion читает выбранный snapshot из БД. User text arrays productsOrServices/targetAudience/geography/advantages/websiteGoals/desiredActions становятся одноэлементными массивами; companyName/description сохраняются, notes и публичные contacts передаются как недоверенный текст notes. Инструкции остаются серверными, industry не выдумывается, payload проходит существующий предел Business input 12000 символов. Сохранённый бриф не выдаётся за BusinessProfile. Изменение current brief во время run не меняет input этого run.
+
+### HTTP contract
+
+| Route | Request | Response |
+|---|---|---|
+| POST /api/v1/admin/projects/:projectId/workflows | `{briefVersionId, idempotencyKey}`: UUIDv4; других ключей нет | `{runId}`; 201 для нового завершившего обработку запроса, 200 для повторного ключа (включая ещё running) |
+| GET /api/v1/admin/projects/:projectId/workflow-state | optional `workflowId` UUIDv4; по умолчанию latest owner run | `{available, limits, run}`; run null либо безопасный DTO |
+
+POST не принимает actor/organization/role/budget/provider/outputs. HTTP 201 означает созданный и обработанный WorkflowRun; бизнес-исход смотрится по persisted status, включая failed/qa_failed. Status DTO: id, projectId, briefVersionId/number, status, startedAt/completedAt/deadlineAt, allowlisted failureCode, пять stages, websiteId/versionId/qaId. Нет текста брифа, prompt, provider payload или credentials. Provider/model/attempt/tokens/duration видны через прежнюю safe usage API. Workflow detail получает дополнительно source_brief_version_id через allowlist projection.
+
+400 invalid shape/IDs/input; 401 unauthenticated; 403 role/CSRF/Origin; 404 missing/cross-project/archived target; 409 conflicting key или active run; 429 rate limit; 503 disabled/unavailable infrastructure. Budget exhaustion после принятия — persisted failed/BUDGET_EXCEEDED; timeout — failed/TIMEOUT; обычный сбой — failed/WORKFLOW_FAILED; semantic QA FAIL — qa_failed с WebsiteVersion/QA, не HTTP 500. Cancellation существующего pipeline сохраняет прежнюю семантику; UI cancel не добавлен.
+
+### Idempotency, concurrency и security
+
+Используется существующая `owner_commands`, новый command kind workflow; actor/key advisory transaction lock и hash normalized project/source. Same actor/key/payload → тот же run, conflicting payload → 409, после рестарта receipt остаётся. Блокировка project row сериализует принятие, active-run check отвергает любой уже running workflow этого проекта; partial unique index дополнительно запрещает два одновременно active owner runs даже при разных brief versions/ключах. После terminal state новый сознательный запуск с новым ключом создаёт новый run, не переписывая историю.
+
+Frontend блокирует повторную отправку ref-lock + disabled; native confirmation dialog остаётся открытым при отправке, чтобы повторный клик не попал на элемент под ним. Его можно закрыть без отмены процесса. При неизвестном результате key сохранён в памяти для повтора того же selector; после refresh активный run обнаруживается сервером. Автоматического POST retry нет.
+
+Только platform_owner запускает; platform_admin read-only, ordinary owner/admin/member/viewer запрещены. Session/CSRF/Origin/JSON schema применяются прежним API boundary. Проверяются exact brief/project/organization binding, active project/organization. 5 launch POST/min на actor; 20 status GET/min, polling 5s. Старые Auth/tenant permissions не ослаблены.
+
+Run + workflow_started audit + owner_commands receipt атомарны; audit failure откатывает всё до вызова provider. Terminal audit остаётся в существующей transaction. Audit не содержит brief/prompts; requestId хранится у run. Parameterized SQL; ошибки безопасны; роли и секреты не попадают в browser bundle. Минимальные runtime grants: INSERT workflow/results/usage/audit, UPDATE только status/result_digest/completed_at/failure_code/current_stage у workflow. Immutable output rows не получают UPDATE/DELETE. API SQL остаётся доверенной инфраструктурой; это не RLS и не production isolation certification.
+
+### Server-owned budget и local configuration
+
+Общий **AICostGuard**, один экземпляр на API service для всех routed stages/providers: максимум 10 provider reservations на workflow, до 4000 output tokens за запрос, суммарно до **40000 reserved output tokens**, максимум 2 concurrent provider calls и 20 calls/min на project. Все primary/fallback attempts расходуют один guard, неудачи не возвращают резерв. Более низкие adapter limits сохраняются. Router maxAttempts/fallback eligibility прежние: только разрешённые transient failures; не auth/validation/security/budget/cancel.
+
+Это лимит OUTPUT reservations, не total input+output и не денежная цена. Input tokens могут дополнительно тарифицироваться; cost engine не добавлен. Budget state process-local; restart не возобновляет runs, поэтому не сбрасывает бюджет ради автоматического повторного выполнения. Guard имеет существующий bounded workflow registry; длительно работающий API потребует lifecycle policy отдельно.
+
+Launch выключен по умолчанию. Для локального режима оператор применяет 004 и дополнительные grants, подаёт существующую PG/provider configuration безопасным server environment и включает `KLEO_WORKFLOW_ENABLED=1` при старте API. Router использует KLEO_AI_PRIMARY_PROVIDER/KLEO_AI_FALLBACK_PROVIDER и существующие provider configs; selector в UI отсутствует. Actual .env не меняется и новым кодом не загружается. При включённом launch неверная provider config отклоняется при старте; SecretProvider остаётся локальным development/test механизмом, enabled production режим явно запрещён до production secret-store реализации. Миграции/изменение grants рабочей базы автоматически не выполнялись; полный api-grants.sql с CREATE ROLE не следует повторно исполнять для уже существующей роли — применяются новые statements.
+
+Live smoke **не выполнялся**. После отдельного решения владельца local запуск через Console использует до 10 платных provider attempts, до 40000 reserved output tokens плюс input tokens, без денежной оценки. Автотесты используют только deterministic fake providers и disposable DB.
+
+### UI и проверка
+
+Проект: сохранённый brief → «Запустить создание сайта» → accessible native dialog с проектом, версией, token/request limits → подтверждение. Кнопка недоступна без брифа, active project, owner, enabled service, при active run или ошибке чтения статуса. Есть loading/error/focus; raw errors скрыты. Polling 5s только running/pending POST, прекращается на terminal/deadline/unmount; refresh читает тот же persisted run. Waiting/current stage берутся из отсутствия execution/current_stage, completed/failed/cancelled — из immutable AgentExecution. Проценты не симулируются; «N из 5» считается по сохранённым executions.
+
+Project/Workflow detail показывают brief version, реальные начало/конец/длительность, этапы, budget/timeout error и links к существующим metadata списка версий конкретного Website, QA и usage. Preview renderer/кнопки Preview нет. Logo, Sidebar, status «Система активна», theme, Settings, Finance не переделаны.
+
+Проверено **1179 PASS / 0 FAIL**: 950 ordinary + 35 persistence PostgreSQL + 129 Auth/API PostgreSQL + 62 browser + 3 real browser/API/PostgreSQL smoke. Baseline 1130 сохранён; добавлено 49 tests. Новый smoke проходит confirmation/cancel, один fake routed pipeline, running → refresh → тот же run → terminal → version/QA/usage; harness отдельно утверждает ровно 5 provider calls. Это автоматизированный реальный браузер, не ручной live AI smoke.
+
+Покрыты оба fake routes, каждый stage failure, semantic QA FAIL, timeout/cancellation, budget stop/no downstream, transient fallback, owner/admin/tenant/anonymous, CSRF/Origin, strict DTO, cross-scope/inactive targets, concurrent duplicate launches/key replay/conflict, exact binding после редактирования, audit rollback, restricted grants/immutable provenance, migration replay/checksum и interrupted-run fail-closed behavior. Typecheck, production build, security/secret scan, bundle scan и diff check выполняются отдельно; live AI calls 0, commit none.
+
+Новые файлы: apps/api/src/workflow-launch.ts; apps/web/src/workflow-launch.tsx; apps/web/tests/launch-smoke.spec.mjs; packages/core/src/workflow-launch.ts; packages/persistence/src/owner-workflow.ts; packages/persistence/migrations/004_owner_workflow.sql; tests/fixtures/launch.mjs; tests/workflow-launch.test.mjs.
+
+Изменены: API index/server; web app/styles/console tests/Playwright config; Business signal propagation; orchestrator optional persistence observer/types; core admin DTO; persistence admin projection/owner_commands reuse/PostgresPersistence/grants; generate-only authorization; local/Docker smoke harness; auth/persistence tests; README и эти SPEC/PLAN/Console документы.
+
+Следующий этап: **Website Preview**. Tilda, Beget deployment, billing/monetary accounting, staff RBAC и durable queue не начинались.

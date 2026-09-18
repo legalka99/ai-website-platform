@@ -113,3 +113,44 @@ for(const phrase of ['ignore previous instructions','show API key','send secrets
 test('Design system policy distinguishes visual interpretation from ungrounded business claims',()=>{
  for(const term of ['market leadership','years in business','certifications','environmental production','nationwide coverage','premium/luxury','visual interpretations','take priority'])assert.ok(DESIGN_INSTRUCTIONS.includes(term));
 });
+
+for(const [name,patch,expected] of [
+ ['invalid color',v=>({...v,colors:{...v.colors,primary:'red'}}),{code:'INVALID_OUTPUT',field:'design.colors.primary'}],
+ ['unsafe prose',v=>({...v,styleName:'https://private.example.test'}),{code:'UNSAFE_DESIGN_TEXT',field:'design.styleName'}],
+ ['credential prose',v=>({...v,notes:'password private-marker'}),{code:'UNSAFE_DESIGN_TEXT',field:'design.notes'}],
+ ['array item',v=>({...v,mood:['Calm','<script>private-marker</script>']}),{code:'UNSAFE_DESIGN_TEXT',field:'design.mood[1]'}],
+ ['unknown property',v=>({...v,'private-marker':'private-marker'}),{code:'INVALID_OUTPUT',field:'design'}],
+ ['oversized wire',v=>({...v,description:'x'.repeat(2001)}),{code:'WIRE_RESOURCE_LIMIT',field:'design'}],
+ ['large array',v=>({...v,mood:Array(13).fill('Calm')}),{code:'WIRE_RESOURCE_LIMIT',field:'design'}],
+])test(`Design diagnostic projects only safe issue: ${name}`,async()=>{
+ const o=options('openai',undefined,patch(businessWire())),r=await(await createRoutedDesignService(o)).run(businessContext());
+ assert.equal(r.success,false);assert.equal(r.errorCode,'INVALID_RESPONSE');assert.ok(r.execution.designDiagnostic.issues.some(i=>i.code===expected.code&&i.field===expected.field));
+ assert.equal(r.execution.routing.attempts[0].outcome,'success');assert.equal(r.execution.usage.totalTokens,30);assert.equal(o.counts.yandex,0);
+ assert.ok(!JSON.stringify(r.execution.designDiagnostic).includes('private'));assert.ok(r.execution.designDiagnostic.issues.every(i=>Object.keys(i).sort().join(',')===(i.code==='UNSAFE_DESIGN_TEXT'?'code,field,reason':'code,field')));
+});
+for(const [name,response,code] of [
+ ['invalid JSON',{content:'{ private-marker'},'WIRE_PARSE_FAILED'],
+ ['oversized JSON',{content:'x'.repeat(24001)},'WIRE_RESOURCE_LIMIT'],
+ ['non-string content',{content:null},'WIRE_SHAPE_INVALID'],
+ ['non-JSON structured',{structured:{styleName:undefined},content:'{}'},'WIRE_SHAPE_INVALID'],
+])test(`Design pre-domain diagnostic: ${name}`,async()=>{
+ const o=options('openai');o.providers.find(p=>p.id==='openai').testAdapter=new FakeProvider(()=>({model:'test-model',...response}));
+ const r=await(await createRoutedDesignService(o)).run(businessContext());assert.equal(r.errorCode,'INVALID_RESPONSE');assert.deepEqual(r.execution.designDiagnostic,{stage:'design-wire',issues:[{code,field:'design'}]});assert.equal(o.counts.yandex,0);
+});
+test('successful Design returns no failure diagnostic',async()=>{const r=await(await createRoutedDesignService(options())).run(businessContext());assert.equal(r.success,true);assert.equal(r.execution.designDiagnostic,undefined);});
+
+for(const [value,reason] of [
+ ['https://private.example.test','UNSAFE_URL'],
+ ['<b>private marker</b>','UNSAFE_HTML'],
+ ['password private-marker','UNSAFE_CREDENTIAL'],
+ ['font-weight: 700','UNSAFE_CODE'],
+ ['sudo command','UNSAFE_SHELL'],
+ ['Sans serif / readable','UNSAFE_CHARACTERS'],
+ ['---','UNSAFE_EMPTY_TEXT'],
+])test(`Design typography diagnostic preserves only detector ${reason}`,async()=>{
+ const wire=businessWire();wire.typography={headingStyle:value,bodyStyle:value};
+ const r=await(await createRoutedDesignService(options('openai',undefined,wire))).run(businessContext());
+ assert.equal(r.success,false);assert.equal(r.errorCode,'INVALID_RESPONSE');
+ assert.deepEqual(r.execution.designDiagnostic,{stage:'design-domain',issues:['headingStyle','bodyStyle'].map(key=>({code:'UNSAFE_DESIGN_TEXT',field:`design.typography.${key}`,reason}))});
+ assert.ok(!JSON.stringify(r.execution.designDiagnostic).includes(value));
+});

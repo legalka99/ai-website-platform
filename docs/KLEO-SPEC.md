@@ -1,5 +1,11 @@
 # Kleo — единое ТЗ и план разработки
 
+Grounding: единый server-owned ConfirmedBusinessFacts из конкретной версии Owner Brief передаётся Business/Content и всем validators; persistence заново проверяет evidence по сохранённой привязке. BusinessProfile/industry/цели/CTA не создают коммерческие факты. Условия и отрицания сохраняются, exact-match остаётся. Content correction отключена по умолчанию; migration 006 отложена и не загружается. Project Knowledge допускает пустой набор фактов и отделён от творческих инструкций и AI suggestions; block editor пока не реализован. [Контракт, ограничения и технический долг](CONFIRMED-BUSINESS-FACTS.md).
+
+**Текущий checkpoint: Owner Workflow Launch MVP.** Из Console владелец запускает существующий Business → Design → Content → Developer → QA pipeline по точной immutable версии брифа. Запуск синхронный, управляемый API-запросом: без очереди, фоновых необслуживаемых Promise и автоматического resume. Записи процесса/этапов/usage переживают обновление браузера; при падении API требуется операторская проверка незавершённого run. Owner-only, CSRF/Origin, идемпотентность, запрет параллельного owner run в проекте, общий server-owned output-token budget. Подробный контракт и ограничения: [ADMIN-CONSOLE](ADMIN-CONSOLE.md#owner-workflow-launch-mvp).
+
+Следующий отдельный этап — **Website Preview**. Preview, Tilda, monetary Cost Accounting и deployment сейчас не реализуются. Исторические checkpoint ниже сохраняются как история.
+
 **Текущий checkpoint: Owner Write MVP.** Владелец может создать организацию, проект и сохранить структурированный бизнес-бриф из Console. PostgreSQL хранит неизменяемые версии брифа. Новые записи разрешены только `platform_owner`; `platform_admin` читает. Статус Sidebar — «Система активна», дизайн и пульс сохранены. AI workflow не запускается. Проверено **1130 PASS / 0 FAIL**: 938 ordinary + 35 persistence + 99 Auth/API + 56 browser + 2 сквозных browser/API/PostgreSQL сценария. Предыдущие checkpoint ниже описывают историю.
 
 Следующий этап: **Workflow Launch + budget controls + status tracking**. Затем Preview → Tilda Integration → Beget staging; порядок deployment можно пересмотреть. Роли сотрудников отложены; требования безопасности перед публичным запуском сохраняются.

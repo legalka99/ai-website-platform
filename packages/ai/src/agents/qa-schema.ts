@@ -30,9 +30,9 @@ export function snapshotQAInput(value:unknown):QAAgentInput & Required<Pick<QAAg
   validateExternal(value,plainJSON,{maxBytes:110000,maxString:8000,maxArray:50,maxDepth:9,maxNodes:2000});
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['website','generatedAt','notes','reviewContext'].includes(k)))throw new SecurityError('INVALID_INPUT');
   const input=value as QAAgentInput;
-  if(!input.reviewContext||Object.keys(input.reviewContext).some(k=>!['business','design','content','businessFacts'].includes(k)))throw new SecurityError('INVALID_INPUT');
-  const {business,design,businessFacts}=input.reviewContext;
-  validateContentInput({business,design,...(businessFacts===undefined?{}:{businessFacts})});
+  if(!input.reviewContext||Object.keys(input.reviewContext).some(k=>!['business','design','content','businessFacts','confirmedBusinessFacts'].includes(k)))throw new SecurityError('INVALID_INPUT');
+  const {business,design,businessFacts,confirmedBusinessFacts}=input.reviewContext;
+  validateContentInput({business,design,...(confirmedBusinessFacts?{confirmedBusinessFacts}:{}),...(businessFacts===undefined?{}:{businessFacts})});
   return structuredClone(input) as QAAgentInput & Required<Pick<QAAgentInput,'reviewContext'>>;
 }
 const equal=(a:unknown,b:unknown):boolean=>{

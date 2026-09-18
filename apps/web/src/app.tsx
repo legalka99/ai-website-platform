@@ -1,3 +1,4 @@
+import { WorkflowLaunch } from "./workflow-launch.js";
 import { CreateResource, BriefPage, BriefSummary } from "./owner-forms.js";
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -465,7 +466,9 @@ function DetailPage({
           {kind === "projects" && <>
             {detailParams.get("briefSaved") === "1" && <p role="status">Бриф сохранён. Актуальные данные показаны ниже.</p>}
             <BriefSummary projectId={id!} owner={owner} />
+            <WorkflowLaunch key={id} projectId={id!} name={r.data.item.name ?? "Проект"} active={r.data.item.status === "active"} owner={owner} />
           </>}
+          {kind === "workflows" && r.data.item.source_brief_version_id && r.data.item.project_id && <WorkflowLaunch projectId={r.data.item.project_id} workflowId={id} name="Проект" active={false} owner={false} />}
           <nav className="related" aria-label="Связанные данные">
             {kind === "organizations" && (
               <>
@@ -504,7 +507,7 @@ function DetailPage({
               </>
             )}
           </nav>
-          {r.data.executions && (
+          {r.data.executions && !r.data.item.source_brief_version_id && (
             <section className="panel">
               <div className="panel-title">
                 <h2>Этапы выполнения</h2>

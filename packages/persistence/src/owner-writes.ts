@@ -12,7 +12,7 @@ async function project(db:PoolClient,id:string,organizationId?:string,lock=false
 async function audit(db:PoolClient,actor:AuthActor,requestId:string,event:string,organizationId:string,projectId:string|null,resourceId:string){
  await db.query('INSERT INTO kleo.security_audit_events(actor_id,request_id,event_type,resource_type,resource_id,organization_id,project_id) VALUES($1,$2,$3,$4,$5,$6,$7)',[actor.userId,requestId,event,projectId?'projects':'organizations',resourceId,organizationId,projectId]);
 }
-async function once(db:PoolClient,actor:AuthActor,key:string,payload:unknown,work:()=>Promise<Record<string,unknown>>){
+export async function once(db:PoolClient,actor:AuthActor,key:string,payload:unknown,work:()=>Promise<Record<string,unknown>>){
  const hash=createHash('sha256').update(JSON.stringify(payload)).digest('hex');
  await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[actor.userId+':'+key]);
  const previous=(await db.query('SELECT request_hash,result FROM kleo.owner_commands WHERE actor_id=$1 AND operation_id=$2',[actor.userId,key])).rows[0];

@@ -668,3 +668,8 @@ summary {
 .brief-field { margin-bottom: 22px; }
 .owner-form p { font-size: 12px; }
 .related-action { padding: 10px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-small); }
+
+.launch-dialog { max-width: 560px; width: calc(100% - 48px); color: var(--text); background: #111e28; border: 1px solid #304655; border-radius: 8px; padding: 24px; }
+.launch-dialog::backdrop { background: #000a; }
+.workflow-launch { margin-top: 24px; }
+.workflow-result-links { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }

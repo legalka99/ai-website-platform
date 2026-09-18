@@ -1,3 +1,4 @@
+import type { ConfirmedBusinessFacts } from '../../core/src/confirmed-business-facts.js';
 import { createHash } from 'node:crypto';
 import { PersistenceError, type PersistenceScope } from './contracts.js';
 import { containsSecret } from '../../security/src/redaction.js';
@@ -33,7 +34,7 @@ export function snapshot(value:unknown):any {
  const copy=walk(value,0);if(Buffer.byteLength(JSON.stringify(copy))>250000)invalid();return copy;
 }
 export function safeLabel(v:unknown,max=200):string {if(typeof v!=='string'||!v.trim()||v.length>max||containsSecret(v)||/[\u0000-\u001f\u007f]/.test(v))invalid();return v as string;}
-export function validateResult(value:WebsiteWorkflowResult,projectId:string):WebsiteWorkflowResult {
+export function validateResult(value:WebsiteWorkflowResult,projectId:string,confirmedBusinessFacts?:ConfirmedBusinessFacts):WebsiteWorkflowResult {
  const r=snapshot(value) as WebsiteWorkflowResult;
  if(typeof r.success!=='boolean'||!r.state||typeof r.state!=='object'||Array.isArray(r.state)||Object.keys(r.state).some(k=>!stages.includes(k as any)))invalid();
  let absent=false;
@@ -42,7 +43,7 @@ export function validateResult(value:WebsiteWorkflowResult,projectId:string):Web
  }
  const s=r.state;
  if(s.business){validateDesignInput(s.business);if(Object.keys(s.business).some(k=>!(businessFields as readonly string[]).includes(k)))invalid();}
- if(s.content&&validateContentGrounding(s.content,{business:s.business!,design:s.design!}))invalid();
+ if(s.content&&validateContentGrounding(s.content,{business:s.business!,design:s.design!,...(confirmedBusinessFacts?{confirmedBusinessFacts}: {})}))invalid();
  if(s.developer&&!validateDeveloperReuse(s.developer,{business:s.business!,design:s.design!,content:s.content!}))invalid();
  if(s.qa){for(const i of s.qa.issues){const p=s.developer!.website.pages.find(p=>p.id===i.pageId);if(i.pageId&&!p||i.blockId&&!p?.blocks.some(b=>b.id===i.blockId))invalid();}}
  if(r.success!==Boolean(s.qa?.passed))invalid();
@@ -57,7 +58,7 @@ export function telemetry(execution:any,scope:PersistenceScope,runId:string,stag
  if(!execution)return [];
  if(execution.projectId!==scope.projectId)invalid();
  const attempts=execution.routing?.attempts;
- if(attempts!==undefined&&(!Array.isArray(attempts)||attempts.length>2))invalid();
+ if(attempts!==undefined&&(!Array.isArray(attempts)||attempts.length>(stage==='content'?4:2)))invalid();
  const source=attempts?.length?attempts:execution.usage?[{provider:execution.usage.provider,model:execution.usage.model,outcome:'unknown',usage:execution.usage}]:[];
  return source.map((a:any)=>{
   if(!['openai','yandex'].includes(a.provider)||!['success','failure','unknown'].includes(a.outcome))invalid();

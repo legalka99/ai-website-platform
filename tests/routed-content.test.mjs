@@ -1,3 +1,4 @@
+import {confirmed} from './fixtures/confirmed-facts.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRoutedContentService } from '../.test-build/packages/ai/src/services/routed-content-service.js';
@@ -98,15 +99,105 @@ for(const primary of ['openai','yandex'])test(`grounding failure after ${primary
  assert.equal(result.success,false);assert.equal(result.output,undefined);assert.equal(result.errorCode,'INVALID_RESPONSE');
  assert.deepEqual(result.validationError,{stage:'content-grounding',path:'sections[0].text',rule:'UNGROUNDED_QUALITY_CLAIM'});
  assert.equal(opts.counts[primary],1);assert.equal(opts.counts[primary==='openai'?'yandex':'openai'],0);
- assert.equal(result.execution.routing.attempts[0].outcome,'success');assert.equal(result.execution.budget.requests,1);
+ assert.equal(result.execution.routing.attempts.length,1);assert.equal(result.execution.routing.attempts[0].outcome,'success');assert.equal(result.execution.budget.requests,1);
  for(const [key,value] of Object.entries({provider:primary,agentType:'content',actorId:'owner',organizationId:'org-1',projectId:'project-1',workflowId:'run-1',totalTokens:30}))assert.equal(result.execution.usage[key],value);
  assert.ok(!JSON.stringify(result).includes('High quality'));
 });
 test('explicit confirmed facts are detached DATA and support a complete risky clause',async()=>{
- const context=businessContext();context.input.businessFacts=['High quality'];const opts=options('openai');let seen=false;
+ const context=businessContext();context.input.businessFacts=['High quality'];context.input.confirmedBusinessFacts=confirmed({advantages:'High quality'});const opts=options('openai');let seen=false;
  opts.providers.find(p=>p.id==='openai').testAdapter=new FakeProvider(req=>{
   seen=true;const data=JSON.parse(req.messages[1].content);assert.deepEqual(data.businessFacts,['High quality']);assert.ok(data.groundingFacts.includes('High quality'));assert.equal(req.messages[0].content,CONTENT_INSTRUCTIONS);
   const p=businessWire();p.sections[0].text='High quality';return {model:req.model,structured:p,content:JSON.stringify(p)};
  });
  assert.equal((await(await createRoutedContentService(opts)).run(context)).success,true);assert.equal(seen,true);assert.deepEqual(context.input.businessFacts,['High quality']);
+});
+
+for(const field of ['keyMessages[2]','sections[0].heading','sections[0].text','sections[0].purpose','sections[0].points[0]'])
+for(const supported of [false,true])test(`Content service claim ${field}: explicit fact=${supported}`,async()=>{
+ const claim='Консультация по выбору стеклянных конструкций';
+ const context=businessContext();
+ context.input.business.productsOrServices=['Стеклянные перегородки'];
+ context.input.business.desiredActions=[claim];
+ context.input.business.websiteGoals=[claim];
+ if(supported){context.input.business.productsOrServices.push(claim);context.input.confirmedBusinessFacts=confirmed({productsOrServices:claim});}
+ const wire=businessWire();
+ for(const section of wire.sections)if(section.callToAction)section.callToAction=claim;
+ if(field==='keyMessages[2]')wire.keyMessages=['Стеклянные перегородки','Конструкции для помещений',claim];
+ else if(field.endsWith('points[0]'))wire.sections[0].points=[claim];
+ else wire.sections[0][field.split('.').at(-1)]=claim;
+ const opts=options('openai',undefined,wire);
+ const r=await(await createRoutedContentService(opts)).run(context);
+ assert.equal(r.success,supported);
+ if(!supported){
+  assert.equal(r.errorCode,'INVALID_RESPONSE');
+  assert.deepEqual(r.validationError,{stage:'content-grounding',path:field,rule:'UNGROUNDED_SERVICE_CLAIM'});
+  assert.equal(r.output,undefined);assert.ok(!JSON.stringify(r.validationError).includes(claim));
+  assert.equal(opts.counts.yandex,0);
+ }
+});
+test('Content prompt uses factual evidence only; product copy and CTA do not assert an associated service',async()=>{
+ const context=businessContext(),wire=businessWire();
+ const claim='Консультация по выбору стеклянных конструкций';
+ context.input.business.productsOrServices=['Стеклянные перегородки'];
+ context.input.business.desiredActions=[claim];context.input.business.websiteGoals=[claim];
+ wire.keyMessages=['Стеклянные перегородки'];context.input.confirmedBusinessFacts=confirmed({productsOrServices:'Стеклянные перегородки',desiredActions:claim,websiteGoals:claim});
+ for(const section of wire.sections)if(section.callToAction)section.callToAction=claim;
+ const opts=options('openai');let seen=false;
+ opts.providers.find(p=>p.id==='openai').testAdapter=new FakeProvider(req=>{
+  seen=true;
+  assert.equal(req.messages[0].content,CONTENT_INSTRUCTIONS);
+  const data=JSON.parse(req.messages[1].content);
+  assert.ok(data.groundingFacts.includes('Стеклянные перегородки'));
+  assert.ok(!data.groundingFacts.includes(claim));
+  assert.deepEqual(data.business.desiredActions,[claim]);
+  return {model:req.model,content:JSON.stringify(wire)};
+ });
+ const r=await(await createRoutedContentService(opts)).run(context);
+ assert.equal(seen,true);assert.equal(r.success,true);
+ assert.deepEqual(r.output.keyMessages,['Стеклянные перегородки']);
+ for(const instruction of ['groundingFacts is the only allowed evidence source','every keyMessages item','CTA-supporting copy','A product being offered does not establish any associated service','omit the claim entirely','desiredActions authorizes only the verbatim CTA label','монтаж','замер','доставка','консультация','проектирование','производство','сопровождение'])assert.ok(CONTENT_INSTRUCTIONS.includes(instruction));
+});
+
+for(const mode of ['success','invalid','schema','security','cta','budget','cancel','fallback'])test(`one Content grounding correction: ${mode}`,async()=>{
+ const opts=options('openai'),requests=[],controller=new AbortController();
+ const bad=businessWire();bad.sections[0].text='Consultation PRIVATE REJECTED MARKER';
+ if(mode==='budget')opts.costs=new AICostGuard({...DEFAULT_AI_LIMITS,maxRequestsPerWorkflow:1});
+ let calls=0;
+ for(const provider of opts.providers)provider.testAdapter=new FakeProvider(req=>{
+  requests.push(structuredClone(req.messages));calls++;
+  if(mode==='fallback'&&provider.id==='openai')throw new AIProviderError('NETWORK');
+  const generation=mode==='fallback'?calls/2:calls;
+  if(mode==='cancel'&&generation===1)controller.abort();
+  let output=generation===1||mode==='invalid'?bad:businessWire();
+  if(generation===2&&mode==='schema')output={};
+  if(generation===2&&mode==='security')output.notes='password: private';
+  if(generation===2&&mode==='cta')output.sections[0].callToAction='Get a quote';
+  return {model:req.model,structured:output,content:JSON.stringify(output),usageRecord:{provider:provider.id,model:req.model,totalTokens:30,durationMs:1,timestamp:'2026-09-18T00:00:00Z',requestId:`call-${calls}`}};
+ });
+ const r=await(await createRoutedContentService(opts,{allowCorrection:true})).run({...businessContext(),signal:controller.signal});
+ assert.equal(calls,['budget','cancel'].includes(mode)?1:mode==='fallback'?4:2);
+ assert.equal(r.success,['success','fallback'].includes(mode));
+ if(!r.success)assert.equal(r.errorCode,mode==='budget'?'LIMIT_EXCEEDED':mode==='cancel'?'CANCELLED':'INVALID_RESPONSE');
+ const corrective=requests.find(messages=>messages.length>2);
+ if(corrective){
+  assert.deepEqual(corrective[1],requests[0][1]);
+  assert.deepEqual(JSON.parse(corrective[3].content),{validationError:{stage:'content-grounding',path:'sections[0].text',rule:'UNGROUNDED_SERVICE_CLAIM'}});
+  assert.ok(corrective[2].content.includes('do not replace it with another invented service'));
+  assert.ok(!JSON.stringify(corrective).includes('PRIVATE REJECTED MARKER'));
+ }
+ assert.equal(r.execution.routing.attempts.length,calls);
+ assert.equal(r.execution.routing.attempts.filter(a=>a.usage).length,mode==='fallback'?2:calls);
+ assert.ok(!JSON.stringify(redact(r)).includes('[CIRCULAR]'));
+ if(mode==='invalid')assert.deepEqual(r.validationError,{stage:'content-grounding',path:'sections[0].text',rule:'UNGROUNDED_SERVICE_CLAIM'});
+});
+test('Content correction counts toward unchanged Workflow Launch request limit',async()=>{
+ const {WORKFLOW_LIMITS}=await import('../.test-build/packages/core/src/workflow-launch.js');
+ assert.equal(WORKFLOW_LIMITS.maxRequestsPerWorkflow,10);
+ const opts=options('openai');opts.costs=new AICostGuard({...DEFAULT_AI_LIMITS,...WORKFLOW_LIMITS,requestsPerMinute:20});
+ for(let i=0;i<9;i++)opts.costs.reserve(ctx.projectId,ctx.workflowId,1000).release();
+ const bad=businessWire();bad.keyMessages=['Consultation'];let calls=0;
+ opts.providers.find(p=>p.id==='openai').testAdapter=new FakeProvider(req=>{calls++;return {model:req.model,structured:bad,content:JSON.stringify(bad)};});
+ const r=await(await createRoutedContentService(opts,{allowCorrection:true})).run(businessContext());
+ assert.equal(calls,1);assert.equal(r.errorCode,'LIMIT_EXCEEDED');assert.equal(r.execution.budget.requests,10);
+ assert.equal(r.execution.routing.attempts.length,1);assert.equal(opts.counts.yandex,0);
 });

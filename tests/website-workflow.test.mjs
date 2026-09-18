@@ -5,14 +5,14 @@ import { validOutputs } from './fixtures/website.mjs';
 
 const stages = ['business', 'design', 'content', 'developer', 'qa'];
 const task = { projectId: 'project-1', goal: 'Create website', input: { companyName: 'Example' } };
-function fixture(failure, throws = false, passed = true) {
+function fixture(failure, throws = false, passed = true, errorCode) {
   const calls = [];
   const outputs = validOutputs(passed);
   const agents = Object.fromEntries(stages.map(type => [type, { type, async run(context) {
     calls.push({ type, context });
     if (type === failure && throws) throw new Error('Unavailable');
     const output = type === 'developer' ? { ...outputs.developer, website: { ...outputs.developer.website, projectId: context.projectId } } : outputs[type];
-    return { success: type !== failure, output, error: type === failure ? 'Unavailable' : undefined };
+    return { success: type !== failure, output, ...(type===failure?{errorCode}:{}), error: type === failure ? 'Unavailable' : undefined };
   } }]));
   return { runner: new WebsiteWorkflowOrchestrator(agents), calls, outputs };
 }
@@ -75,3 +75,11 @@ test('rejects a contradictory passing QA report', async () => {
   assert.ok(result.state.developer);
   assert.equal(result.state.qa, undefined);
 });
+
+for(const stage of ['design','developer','qa'])test(`${stage} safe AgentResult code survives workflow catch`,async()=>{
+ const {runner}=fixture(stage,false,true,'INVALID_RESPONSE');const r=await runner.run(task);assert.deepEqual(r.stageError,{stage,errorCode:'INVALID_RESPONSE'});
+});
+for(const code of [undefined,'UNKNOWN','private response','INVALID_RESPONSE\nprivate','constructor',42])test('workflow omits unsafe or unknown stage code '+JSON.stringify(code),async()=>{
+ const {runner}=fixture('design',false,true,code);const r=await runner.run(task);assert.equal(r.stageError,undefined);
+});
+test('arbitrary exception never supplies a stage error code',async()=>{const {runner}=fixture('design',true,true,'INVALID_RESPONSE');assert.equal((await runner.run(task)).stageError,undefined);});

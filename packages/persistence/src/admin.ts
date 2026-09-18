@@ -44,7 +44,7 @@ const specs = {
   workflows: {
     table: "kleo.workflow_runs r",
     fields:
-      "r.id,r.organization_id,r.project_id,r.status,r.started_at,r.completed_at",
+      "r.id,r.organization_id,r.project_id,r.status,r.started_at,r.completed_at,r.source_brief_version_id",
     order: "r.started_at",
   },
   websites: {
@@ -90,6 +90,7 @@ const fields = [
   "website_id",
   "website_version_id",
   "workflow_run_id",
+  "source_brief_version_id",
   "created_at",
   "updated_at",
   "started_at",

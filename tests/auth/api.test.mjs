@@ -1,3 +1,6 @@
+import {WorkflowLaunchService} from '../../.test-build/apps/api/src/workflow-launch.js';
+import {WORKFLOW_LIMITS} from '../../.test-build/packages/core/src/workflow-launch.js';
+import {fakeLaunchFactory,launchBrief} from '../fixtures/launch.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -17,7 +20,7 @@ let runtime,auth,operator,A,B,owner,hash;
 const forbiddenNetwork=globalThis.fetch;globalThis.fetch=async()=>{throw Error('Live calls forbidden');};
 test.before(async()=>{
  await pool.query(await readFile(new URL('../../packages/persistence/sql/api-grants.sql',import.meta.url),'utf8'));
- runtime=new Pool({max:1,options:'-c role=kleo_api'});auth=await AuthRepository.create(runtime,3600);operator=await AuthRepository.create(pool);hash=await hashPassword(password);
+ runtime=new Pool({max:4,options:'-c role=kleo_api'});auth=await AuthRepository.create(runtime,3600);operator=await AuthRepository.create(pool);hash=await hashPassword(password);
  A=await tenant();B=await tenant();await operator.bootstrapOwner('owner@example.test',password);owner={email:'owner@example.test'};
 });
 test.after(async()=>{globalThis.fetch=forbiddenNetwork;await runtime?.end();await pool.end();});
@@ -27,7 +30,7 @@ async function tenant(){const {userId,organizationId}=await repo.provisionOrgani
  const stored=await repo.finishRun(scope,run.id,{success:true,state:{...input.reviewContext,developer:{website:input.website,generatedAt:input.generatedAt},qa:{passed:true,score:90,issues:[],checkedAt:new Date().toISOString()}},executions:{qa:{projectId,usage:{provider:'openai',model:'test',workflowId:run.id,totalTokens:30,durationMs:1}}}});
  return {...scope,userId,email,stored};
 }
-async function app(t,overrides={},store=auth){const logs=[],api=await createApi(store,{...config,...overrides},{log:e=>logs.push(e)});t.after(()=>api.close());return {api,logs};}
+async function app(t,overrides={},store=auth,options={}){const logs=[],api=await createApi(store,{...config,...overrides},{...options,log:e=>logs.push(e)});t.after(()=>api.close());return {api,logs};}
 function request(api,path,opts={}){return api.inject({method:opts.method??'GET',url:path,headers:{host:'localhost:3001',...(opts.method==='POST'?{origin:config.origins[0],'content-type':'application/json'}:{}),...(opts.cookie?{cookie:opts.cookie}:{}),...(opts.csrf?{'x-csrf-token':opts.csrf}:{}),...opts.headers},...(opts.body!==undefined?{payload:opts.body}:{})});}
 async function login(api,user=A,headers={}){const r=await request(api,'/api/v1/auth/login',{method:'POST',body:{email:user.email,password},headers});assert.equal(r.statusCode,200);return {cookie:r.headers['set-cookie'].split(';')[0],csrf:r.json().csrfToken,response:r};}
 for(const label of ['wrong','unknown','disabled'])test(`login ${label} has generic indistinguishable external error`,async t=>{const {api}=await app(t);let email=A.email,pass=password+'x';if(label==='unknown'){email='missing@example.test';pass=password;}if(label==='disabled'){const c=await tenant();email=c.email;pass=password;await pool.query("UPDATE kleo.users SET status='disabled' WHERE id=$1",[c.userId]);}
@@ -78,7 +81,7 @@ test('bootstrap owner is explicit singleton, password only Argon2id hash; runtim
  for(const sql of ["UPDATE kleo.platform_roles SET role='platform_owner'","UPDATE kleo.auth_accounts SET password_hash='bad'",'DELETE FROM kleo.auth_sessions','CREATE TABLE kleo.forbidden(id int)',"UPDATE kleo.memberships SET role='owner'"])await assert.rejects(runtime.query(sql),e=>e.code==='42501');
 });
 test('DB failures produce safe errors without upstream messages or SQL',async t=>{const fake={...auth,withSession:async()=>{throw Error('password=PRIVATE SQL /Users/private postgres://secret');}};const {api,logs}=await app(t,{},fake);const r=await request(api,'/api/v1/auth/me',{cookie:'kleo_session='+'a'.repeat(43)});assert.equal(r.statusCode,500);for(const marker of ['PRIVATE','SQL','/Users','postgres://','password'])assert.ok(!r.body.includes(marker)&&!JSON.stringify(logs).includes(marker));});
-test('auth migration replay and checksum protection remain active',async()=>{const migrations=await loadMigrations();await migrate(pool,migrations);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,'3');const changed=migrations.map(m=>m.name.startsWith('002')?{...m,sql:m.sql+'\n-- drift'}:m);await assert.rejects(migrate(pool,changed),e=>e.code==='MIGRATION_MISMATCH');});
+test('auth migration replay and checksum protection remain active',async()=>{const migrations=await loadMigrations();await migrate(pool,migrations);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,String(migrations.length));const changed=migrations.map(m=>m.name.startsWith('002')?{...m,sql:m.sql+'\n-- drift'}:m);await assert.rejects(migrate(pool,changed),e=>e.code==='MIGRATION_MISMATCH');});
 test('security audit records login/logout and denials without raw email/password/token',async t=>{
  const {api}=await app(t),s=await login(api),denied=await request(api,'/api/v1/admin/users',s),out=await request(api,'/api/v1/auth/logout',{method:'POST',...s,body:{}});
  const rows=(await pool.query('SELECT event_type,request_id,actor_id,resource_type FROM kleo.security_audit_events WHERE request_id=ANY($1::uuid[])',[[s.response.headers['x-request-id'],denied.headers['x-request-id'],out.headers['x-request-id']]])).rows;
@@ -226,4 +229,156 @@ test('nested project/brief writes require CSRF and Origin independently',async t
 test('names are not globally unique and archived project cannot accept new brief',async t=>{const {api}=await app(t),s=await login(api,owner),{org,project}=await ownerProject(api,s);
  const a=await request(api,'/api/v1/admin/organizations',{...s,method:'POST',body:nameCommand(org.name)});assert.equal(a.statusCode,200);assert.notEqual(a.json().id,org.id);
  await pool.query("UPDATE kleo.projects SET status='archived' WHERE id=$1",[project.id]);assert.equal((await request(api,`/api/v1/admin/projects/${project.id}/brief`,{...s,method:'POST',body:{operationId:randomUUID(),organizationId:org.id,expectedVersion:0,brief:ownerBrief()}})).statusCode,404);
+});
+
+async function launchSetup(t, fakeOptions={}, limits=WORKFLOW_LIMITS,report){
+ const fake=fakeLaunchFactory(fakeOptions),workflows=new WorkflowLaunchService(runtime,fake.factory,limits,report);
+ const {api,logs}=await app(t,{},auth,{workflows}),session=await login(api,owner);
+ const post=(path,body,opts={})=>request(api,path,{method:'POST',...session,body,...opts});
+ const org=await post('/api/v1/admin/organizations',{operationId:randomUUID(),name:'Launch fixture'});assert.equal(org.statusCode,200);
+ const organizationId=org.json().id;
+ const project=await post(`/api/v1/admin/organizations/${organizationId}/projects`,{operationId:randomUUID(),name:'Launch test'});assert.equal(project.statusCode,200);const projectId=project.json().id;
+ const saved=await post(`/api/v1/admin/projects/${projectId}/brief`,{operationId:randomUUID(),organizationId,expectedVersion:0,brief:launchBrief()});assert.equal(saved.statusCode,200);
+ const briefVersionId=saved.json().id,path=`/api/v1/admin/projects/${projectId}/workflows`,body={briefVersionId,idempotencyKey:randomUUID()};
+ const state=async()=>{const res=await request(api,`/api/v1/admin/projects/${projectId}/workflow-state`,session);assert.equal(res.statusCode,200);return res.json().run;};
+ return {...fake,api,logs,post,organizationId,projectId,briefVersionId,path,body,session,state};
+}
+for(const primary of ['openai','yandex'])test(`owner launch real routed fake ${primary} persists all stages, outputs and usage without membership`,async t=>{
+ const x=await launchSetup(t,{primary});const response=await x.post(x.path,x.body);assert.equal(response.statusCode,201,response.body);assert.deepEqual(Object.keys(response.json()),['runId']);
+ const state=await x.state();assert.equal(state.status,'completed');assert.equal(state.briefVersionId,x.briefVersionId);assert.equal(state.stages.filter(s=>s.status==='completed').length,5);assert.ok(state.versionId&&state.qaId);
+ for(const [table,count] of [['domain_snapshots',3],['agent_executions',5],['ai_usage',5],['website_versions',1],['qa_reports',1],['audit_events',2]])assert.equal(Number((await pool.query(`SELECT count(*) FROM kleo.${table} WHERE workflow_run_id=$1`,[state.id])).rows[0].count),count,table);
+ assert.equal(Number((await pool.query('SELECT count(*) FROM kleo.memberships WHERE organization_id=$1',[x.organizationId])).rows[0].count),0);
+ assert.equal((await pool.query('SELECT request_id FROM kleo.workflow_runs WHERE id=$1',[state.id])).rows[0].request_id,response.headers['x-request-id']);
+ const repeat=await x.post(x.path,x.body);assert.equal(repeat.statusCode,200);assert.equal(repeat.json().runId,state.id);assert.equal(x.calls.length,5);
+ const revised=await x.post(`/api/v1/admin/projects/${x.projectId}/brief`,{operationId:randomUUID(),organizationId:x.organizationId,expectedVersion:1,brief:{...launchBrief(),notes:'Revised'}});assert.equal(revised.statusCode,200);
+ assert.equal((await x.state()).briefVersionId,x.briefVersionId);assert.equal((await x.post(x.path,{...x.body,briefVersionId:revised.json().id})).statusCode,409);
+ for(const marker of ['TEST_ONLY_LAUNCH_CREDENTIAL','RAW_PROVIDER','system prompt','document','password_hash'])assert.ok(!JSON.stringify([state,x.logs,response.json()]).includes(marker));
+});
+test('owner launch concurrency: active duplicate and key replay never execute twice; status survives a second API instance',async t=>{
+ let entered,release;const started=new Promise(r=>entered=r),wait=new Promise(r=>release=r);const x=await launchSetup(t,{hold:async stage=>{if(stage==='business'){entered();await wait;}}});
+ const first=x.post(x.path,x.body);await Promise.race([started,first.then(r=>{throw Error('Launch ended before provider: '+r.statusCode);})]);
+ try{
+  const state=await x.state();assert.equal(state.status,'running');assert.equal(state.stages[0].status,'running');
+  const second=await x.post(x.path,x.body);assert.equal(second.statusCode,200);assert.equal(second.json().runId,state.id);
+  assert.equal((await x.post(x.path,{...x.body,idempotencyKey:randomUUID()})).statusCode,409);
+  const {api}=await app(t),session=await login(api,owner);const recovered=await request(api,`/api/v1/admin/projects/${x.projectId}/workflow-state`,session);assert.equal(recovered.json().run.id,state.id);assert.equal(recovered.json().run.status,'running');
+  const changed=await x.post(`/api/v1/admin/projects/${x.projectId}/brief`,{operationId:randomUUID(),organizationId:x.organizationId,expectedVersion:1,brief:{...launchBrief(),notes:'New brief during run'}});assert.equal(changed.statusCode,200);
+  assert.equal((await x.post(x.path,{briefVersionId:changed.json().id,idempotencyKey:randomUUID()})).statusCode,409);
+  assert.equal((await x.state()).briefVersionId,x.briefVersionId);
+ }finally{release();}assert.equal((await first).statusCode,201);assert.equal(x.calls.length,5);
+});
+for(const fail of ['business','design','content','developer','qa'])test(`owner launch ${fail} failure stops downstream and preserves consumed usage`,async t=>{
+ const x=await launchSetup(t,{fail});const response=await x.post(x.path,x.body);assert.equal(response.statusCode,201);const state=await x.state();assert.equal(state.status,'failed');assert.equal(state.failureCode,'WORKFLOW_FAILED');
+ const index=['business','design','content','developer','qa'].indexOf(fail);assert.equal(x.calls.length,index+1);assert.equal(state.stages[index].status,'failed');assert.equal(state.stages.filter(s=>s.status==='completed').length,index);assert.ok(!JSON.stringify(state).includes('RAW_PROVIDER'));
+ const usage=await pool.query('SELECT * FROM kleo.ai_usage WHERE workflow_run_id=$1',[state.id]);assert.ok(usage.rows.length>=index);
+});
+test('owner launch valid semantic QA fail is a persisted qa_failed result, not HTTP 500',async t=>{const x=await launchSetup(t,{qaPass:false});assert.equal((await x.post(x.path,x.body)).statusCode,201);const state=await x.state();assert.equal(state.status,'qa_failed');assert.ok(state.qaId&&state.versionId);assert.equal(state.stages[4].status,'completed');});
+test('owner launch shared budget exhaustion blocks downstream and keeps prior usage',async t=>{
+ const x=await launchSetup(t,{}, {...WORKFLOW_LIMITS,maxRequestsPerWorkflow:2});assert.equal((await x.post(x.path,x.body)).statusCode,201);const state=await x.state();assert.equal(state.status,'failed');assert.equal(state.failureCode,'BUDGET_EXCEEDED');assert.equal(x.calls.length,2);assert.equal(state.stages[2].status,'failed');assert.equal(Number((await pool.query('SELECT count(*) FROM kleo.ai_usage WHERE workflow_run_id=$1 AND total_tokens=30',[state.id])).rows[0].count),2);
+});
+test('owner launch transient fallback uses existing Router and shared accounting',async t=>{const x=await launchSetup(t,{transient:true});assert.equal((await x.post(x.path,x.body)).statusCode,201);const state=await x.state();assert.equal(state.status,'completed');assert.equal(x.calls.length,6);assert.equal(Number((await pool.query('SELECT count(*) FROM kleo.ai_usage WHERE workflow_run_id=$1',[state.id])).rows[0].count),6);});
+for(const role of ['anonymous','tenant','platform_admin'])test(`owner launch denies ${role}`,async t=>{
+ const x=await launchSetup(t);let session={};if(role==='tenant')session=await login(x.api,A);if(role==='platform_admin'){const c=await tenant();await pool.query("INSERT INTO kleo.platform_roles(user_id,role) VALUES($1,'platform_admin')",[c.userId]);session=await login(x.api,c);}
+ const res=await request(x.api,x.path,{method:'POST',...session,body:x.body});assert.equal(res.statusCode,role==='anonymous'?401:403);assert.equal(x.calls.length,0);
+});
+for(const mode of ['csrf','origin','extra','missing-brief','wrong-project','inactive-project','inactive-org'])test(`owner launch rejects ${mode} before AI`,async t=>{
+ const x=await launchSetup(t);let body={...x.body},path=x.path,opts={},expected=400;
+ if(mode==='csrf'){opts.csrf='invalid';expected=403;}if(mode==='origin'){opts.headers={origin:'https://evil.test'};expected=403;}
+ if(mode==='extra')body.budgetBypass=true;if(mode==='missing-brief'){body.briefVersionId=randomUUID();expected=404;}
+ if(mode==='wrong-project'){path=`/api/v1/admin/projects/${B.projectId}/workflows`;expected=404;}
+ if(mode==='inactive-project'){await pool.query("UPDATE kleo.projects SET status='archived' WHERE id=$1",[x.projectId]);expected=404;}
+ if(mode==='inactive-org'){await pool.query("UPDATE kleo.organizations SET status='archived' WHERE id=$1",[x.organizationId]);expected=404;}
+ assert.equal((await x.post(path,body,opts)).statusCode,expected);assert.equal(x.calls.length,0);
+});
+test('owner launch audit failure rolls back run and command before AI',async t=>{
+ const x=await launchSetup(t);await pool.query("CREATE FUNCTION kleo.fail_launch_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test only'; END $$; CREATE TRIGGER fail_launch_audit BEFORE INSERT ON kleo.audit_events FOR EACH ROW EXECUTE FUNCTION kleo.fail_launch_audit()");
+ try{assert.equal((await x.post(x.path,x.body)).statusCode,503);assert.equal(x.calls.length,0);assert.equal(await x.state(),null);assert.equal(Number((await pool.query('SELECT count(*) FROM kleo.owner_commands WHERE operation_id=$1',[x.body.idempotencyKey])).rows[0].count),0);}finally{await pool.query('DROP TRIGGER fail_launch_audit ON kleo.audit_events; DROP FUNCTION kleo.fail_launch_audit()');}
+});
+test('owner launch status selector cannot expose another project run',async t=>{const x=await launchSetup(t);const response=await x.post(x.path,x.body);assert.equal((await request(x.api,`/api/v1/admin/projects/${B.projectId}/workflow-state?workflowId=${response.json().runId}`,x.session)).statusCode,404);});
+test('owner launch timeout is persisted, consumes no fallback or downstream stage',async t=>{
+ const x=await launchSetup(t,{hold:async(_stage,signal)=>{await new Promise(resolve=>{if(signal.aborted)resolve();else signal.addEventListener('abort',resolve,{once:true});});}},{...WORKFLOW_LIMITS,timeoutMs:30});
+ const res=await x.post(x.path,x.body);assert.equal(res.statusCode,201);const state=await x.state();assert.equal(state.status,'failed');assert.equal(state.failureCode,'TIMEOUT');assert.equal(x.calls.length,1);assert.equal(state.stages[0].status,'failed');
+});
+test('owner launch binding and provenance immutable at DB; scope-bound store cannot finish another run',async t=>{
+ const x=await launchSetup(t);await x.post(x.path,x.body);const state=await x.state();
+ await assert.rejects(runtime.query('UPDATE kleo.workflow_runs SET source_brief_version_id=$2 WHERE id=$1',[state.id,randomUUID()]),e=>e.code==='42501');
+ await assert.rejects(pool.query('UPDATE kleo.workflow_runs SET source_brief_version_id=$2 WHERE id=$1',[state.id,randomUUID()]),e=>e.code==='23514');
+ const s={actorId:A.userId,projectId:x.projectId,organizationId:x.organizationId};await assert.rejects(new PostgresPersistence(runtime,{id:state.id,scope:s}).getRun(s,state.id),e=>e.code==='ACCESS_DENIED');
+});
+test('owner workflow DB binding rejects cross-project source, tenant owner launch forgery and preserves legacy membership FK',async t=>{
+ const x=await launchSetup(t);const ownerId=(await pool.query("SELECT user_id FROM kleo.platform_roles WHERE role='platform_owner'")).rows[0].user_id;
+ const sql="INSERT INTO kleo.workflow_runs(organization_id,project_id,actor_id,invocation_id,source_brief_version_id,request_id,deadline_at) VALUES($1,$2,$3,$4,$5,$6,now()+interval '10 minutes')";
+ await assert.rejects(pool.query(sql,[B.organizationId,B.projectId,ownerId,randomUUID(),x.briefVersionId,randomUUID()]),e=>e.code==='23503');
+ await assert.rejects(pool.query(sql,[x.organizationId,x.projectId,A.userId,randomUUID(),x.briefVersionId,randomUUID()]),e=>e.code==='23503');
+ await assert.rejects(pool.query('DELETE FROM kleo.memberships WHERE organization_id=$1 AND user_id=$2',[A.organizationId,A.userId]),e=>e.code==='23503');
+ assert.equal(x.calls.length,0);
+});
+test('terminal failure relaunch is explicit new run; old history remains immutable',async t=>{
+ const x=await launchSetup(t,{qaPass:false});const first=await x.post(x.path,x.body),second=await x.post(x.path,{...x.body,idempotencyKey:randomUUID()});assert.equal(first.statusCode,201);assert.equal(second.statusCode,201);assert.notEqual(first.json().runId,second.json().runId);assert.equal(x.calls.length,10);
+ const history=await pool.query('SELECT source_brief_version_id,status FROM kleo.workflow_runs WHERE project_id=$1',[x.projectId]);assert.equal(history.rows.length,2);assert.ok(history.rows.every(r=>r.status==='qa_failed'&&r.source_brief_version_id===x.briefVersionId));
+});
+test('owner launch rate limit and disabled composition cannot create unbounded work',async t=>{
+ const x=await launchSetup(t);await x.post(x.path,x.body);for(let i=0;i<4;i++)assert.equal((await x.post(x.path,x.body)).statusCode,200);assert.equal((await x.post(x.path,x.body)).statusCode,429);assert.equal(x.calls.length,5);
+ const {api}=await app(t),session=await login(api,owner);const res=await request(api,x.path,{method:'POST',...session,body:{...x.body,idempotencyKey:randomUUID()}});assert.equal(res.statusCode,503);assert.equal(Number((await pool.query('SELECT count(*) FROM kleo.workflow_runs WHERE project_id=$1',[x.projectId])).rows[0].count),1);
+});
+test('restart leaves expired interrupted run visible and blocks automatic/duplicate execution',async t=>{
+ const x=await launchSetup(t),actorId=(await pool.query("SELECT user_id FROM kleo.platform_roles WHERE role='platform_owner'")).rows[0].user_id,runId=randomUUID();
+ await pool.query("INSERT INTO kleo.workflow_runs(id,organization_id,project_id,actor_id,invocation_id,source_brief_version_id,request_id,started_at,deadline_at,current_stage) VALUES($1,$2,$3,$4,$5,$6,$7,now()-interval '11 minutes',now()-interval '1 minute','business')",[runId,x.organizationId,x.projectId,actorId,randomUUID(),x.briefVersionId,randomUUID()]);
+ const state=await x.state();assert.equal(state.id,runId);assert.equal(state.status,'running');assert.ok(Date.parse(state.deadlineAt)<Date.now());assert.equal((await x.post(x.path,x.body)).statusCode,409);assert.equal(x.calls.length,0);
+});
+test('migration 004 checksum and generated membership binding survive replay',async()=>{
+ const files=await loadMigrations(),last=files.find(f=>f.name.startsWith('004_'));assert.ok(last);await assert.rejects(migrate(pool,files.map(f=>f===last?{...f,sql:f.sql+'\n-- tamper'}:f)),e=>e.code==='MIGRATION_MISMATCH');
+});
+
+test('Design validation diagnostic reaches internal reporter after launch without public response or DB payload leakage',async t=>{
+ const events=[],x=await launchSetup(t,{invalidDesign:true},WORKFLOW_LIMITS,event=>events.push(event));
+ const response=await x.post(x.path,x.body);assert.equal(response.statusCode,201);const run=await x.state();assert.equal(run.status,'failed');
+ assert.equal(events.length,1);assert.equal(events[0].runId,run.id);assert.equal(events[0].event,'design_validation_failed');assert.equal(events[0].diagnostic.stage,'design-domain');
+ assert.ok(events[0].diagnostic.issues.some(i=>i.code==='INVALID_OUTPUT'&&i.field==='design.styleName'));
+ assert.ok(events[0].diagnostic.issues.every(i=>Object.keys(i).sort().join(',')==='code,field'));
+ assert.deepEqual(Object.keys(response.json()),['runId']);assert.equal(run.diagnostic,undefined);
+ const rows=(await pool.query("SELECT error_code FROM kleo.agent_executions WHERE workflow_run_id=$1 AND agent_type='design'",[run.id])).rows;assert.equal(rows[0].error_code,'INVALID_RESPONSE');
+ assert.equal(x.calls.length,2);
+});
+
+test('Content validation diagnostic reaches internal launch log with unchanged public response',async t=>{
+ const events=[],x=await launchSetup(t,{invalidContent:true},WORKFLOW_LIMITS,event=>events.push(event));
+ const response=await x.post(x.path,x.body);assert.equal(response.statusCode,201);const run=await x.state();assert.equal(run.status,'failed');
+ assert.equal(events.length,1);assert.equal(events[0].event,'content_validation_failed');assert.equal(events[0].runId,run.id);
+ assert.equal(events[0].diagnostic.stage,'content-schema');assert.equal(events[0].diagnostic.rule,'SCHEMA_REQUIRED');assert.deepEqual(Object.keys(events[0].diagnostic).sort(),['path','rule','stage']);
+ assert.deepEqual(Object.keys(response.json()),['runId']);assert.equal(run.diagnostic,undefined);assert.equal(x.calls.length,3);
+ const executions=(await pool.query('SELECT agent_type,status,error_code FROM kleo.agent_executions WHERE workflow_run_id=$1',[run.id])).rows;
+ assert.equal(executions.find(e=>e.agent_type==='content').error_code,'INVALID_RESPONSE');assert.ok(executions.filter(e=>e.agent_type!=='content').every(e=>e.status==='completed'&&e.error_code===null));
+});
+
+test('Owner Brief evidence is identical across agents and validators; supported service persists without 006',async t=>{
+ const seen={};const claim='Выполняем монтаж';
+ const x=await launchSetup(t,{contentText:claim,inspectRequest(stage,req){seen[stage]=JSON.parse(req.messages[1].content);}});
+ const saved=await x.post(`/api/v1/admin/projects/${x.projectId}/brief`,{operationId:randomUUID(),organizationId:x.organizationId,expectedVersion:1,brief:{...launchBrief(),productsOrServices:claim}});
+ assert.equal(saved.statusCode,200);const version=saved.json().id;
+ const r=await x.post(x.path,{...x.body,briefVersionId:version});assert.equal(r.statusCode,201);
+ const state=await x.state();assert.equal(state.status,'completed');assert.equal(x.calls.length,5);
+ const facts=seen.business.confirmedBusinessFacts;
+ assert.ok(facts.facts.every(f=>f.source.briefVersionId===version));
+ assert.deepEqual(seen.content.confirmedBusinessFacts,facts);assert.ok(seen.content.groundingFacts.includes(claim));
+ // Persisted successful Content proves the independent DB revalidation uses the bound Brief.
+ const content=(await pool.query("SELECT document FROM kleo.domain_snapshots WHERE workflow_run_id=$1 AND kind='content'",[state.id])).rows[0].document;
+ assert.equal(content.sections[0].text,claim);
+ assert.equal((await pool.query("SELECT count(*) FROM kleo.schema_migrations WHERE name='006_content_correction_usage.sql'")).rows[0].count,'0');
+ // A new run bound to v1 must not borrow evidence from v2 or from caller-supplied metadata.
+ const actorId=(await pool.query("SELECT user_id FROM kleo.platform_roles WHERE role='platform_owner'")).rows[0].user_id;
+ const runId=randomUUID(),scope={actorId,organizationId:x.organizationId,projectId:x.projectId};
+ await pool.query("INSERT INTO kleo.workflow_runs(id,organization_id,project_id,actor_id,invocation_id,source_brief_version_id,request_id,deadline_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '10 minutes')",[runId,scope.organizationId,scope.projectId,actorId,randomUUID(),x.briefVersionId,randomUUID()]);
+ const snapshots=(await pool.query('SELECT kind,document FROM kleo.domain_snapshots WHERE workflow_run_id=$1',[state.id])).rows;
+ const forged={success:false,state:Object.fromEntries(snapshots.map(r=>[r.kind,r.document])),confirmedBusinessFacts:facts};
+ const store=new PostgresPersistence(runtime,{id:runId,scope});
+ await assert.rejects(store.finishRun(scope,runId,forged),e=>e.code==='INVALID_INPUT');
+ assert.equal((await pool.query('SELECT count(*) FROM kleo.domain_snapshots WHERE workflow_run_id=$1',[runId])).rows[0].count,'0');
+});
+test('Owner Launch rejects unconfirmed service in one Content generation and ignores request evidence injection',async t=>{
+ const x=await launchSetup(t,{contentText:'Доставляем изделия'});
+ const forged={...x.body,confirmedBusinessFacts:{facts:[]}};
+ assert.equal((await x.post(x.path,forged)).statusCode,400);
+ assert.equal((await x.post(x.path,x.body)).statusCode,201);
+ assert.equal((await x.state()).status,'failed');assert.deepEqual(x.calls.map(c=>c.stage),['business','design','content']);
 });

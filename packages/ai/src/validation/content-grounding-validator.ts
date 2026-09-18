@@ -1,3 +1,4 @@
+import { validateConfirmedBusinessFacts, factualClauses, type ConfirmedBusinessFacts } from '../../../core/src/confirmed-business-facts.js';
 import type { ContentAgentInput } from '../contracts/content-agent-input.js';
 import type { ContentPlan } from '../contracts/content-plan.js';
 import type { ContentValidationError } from '../contracts/content-validation-error.js';
@@ -5,7 +6,8 @@ import type { ContentValidationError } from '../contracts/content-validation-err
 /** Bounded RU/EN high-risk claim detection, not general natural-language entailment.
  * Call only after input and ContentPlan runtime validation. No model or tool calls. */
 const normalize = (text:string) => text.normalize('NFKC').toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-const sentences = (text:string) => text.split(/(?<!\d)[.!?;\n]+|[.!?;\n]+(?!\d)|\s+(?:но|зато|однако|but|however)\s+/iu).map(s=>s.trim()).filter(Boolean);
+// Preserve contrast/condition clauses identically in evidence and output.
+const sentences = factualClauses;
 // Only narrowly specified missing-information requests are exempt. Never exempt a
 // whole field or an arbitrary sentence just because it contains “confirm” or “not”.
 const topics = /^(?:(?:о|об|и|или|the|and|or|about|of|for)\s+|(?:качеств\p{L}*|гаранти\p{L}*|услови\p{L}*|срок\p{L}*|изготовлени\p{L}*|доставк\p{L}*|материал\p{L}*|вариант\p{L}*|отделк\p{L}*|замер\p{L}*|монтаж\p{L}*|способ\p{L}*|связ\p{L}*|цен\p{L}*|опыт\p{L}*|сертификат\p{L}*|консультаци\p{L}*|quality|guarantees?|warrant(?:y|ies)|terms|deadlines?|delivery|materials?|prices?|experience|certificates?|consultations?)\s*[, ]*)+$/iu;
@@ -17,14 +19,11 @@ function informationRequest(text:string):boolean {
   if(request) return [request[1],request[2]].every(part=>!part||topics.test(part));
   return /^(?:объяснить практическую ценность обращения без неподтвержд[её]нных обещаний|do not add unsupported promises)$/iu.test(value);
 }
-const uncertain = /(?:^|[^\p{L}])(?:не|нет|без|если|возможно|нужно|требуется|подтвердить|not|no|without|if|may|might|confirm|unconfirmed|unknown)(?:$|[^\p{L}])/iu;
-
-/** Source authority is explicit business data, never design, goal, competitors or
- * missing-information notes. The caller must obtain user confirmation upstream. */
-export function contentGroundingFacts(input:ContentAgentInput):string[] {
-  const b=input.business;
-  return [b.companyName,b.industry,b.description,...b.productsOrServices,...b.targetAudience,...(b.geography??[]),...(b.advantages??[]),...(input.businessFacts??[])]
-    .flatMap(sentences).filter(s=>!informationRequest(s)&&!uncertain.test(s));
+/** Only immutable Brief evidence; goals and CTA labels are never commercial authority. */
+export function contentGroundingFacts(facts:ConfirmedBusinessFacts|undefined):string[] {
+  if(!facts)return [];
+  return validateConfirmedBusinessFacts(facts).facts
+    .flatMap(f=>factualClauses(f.value)).filter(s=>!informationRequest(s));
 }
 
 const detectors:readonly [string,RegExp][] = [
@@ -34,7 +33,7 @@ const detectors:readonly [string,RegExp][] = [
   ['CAPABILITY',/(?:любой|любые|любых|любого)\s+(?:сложности|размер\p{L}*|задач\p{L}*|решени\p{L}*)|полный спектр|\b(?:any complexity|any size|any task|full range|all solutions)\b/iu],
   ['PRICE',/(?:выгодн\p{L}*|лучш\p{L}*|доступн\p{L}*|низк\p{L}*)\s+цен\p{L}*|экономи\p{L}*|дешевле|скидк\p{L}*|\b(?:affordable|low prices?|best prices?|save money|cheaper|discount\w*)\b/iu],
   ['GUARANTEE',/гаранти\p{L}*|безопасност\p{L}*|долговечн\p{L}*|герметичн\p{L}*|\b(?:guarantee\w*|warrant\w*|safety|durable|durability|watertight)\b/iu],
-  ['SERVICE',/(?:индивидуальн\p{L}*|персональн\p{L}*)\s+подход|консультаци\p{L}*|бесплатн\p{L}*|сопровождени\p{L}*|под ключ|(?:специалист\p{L}*|мы)\s+помо\p{L}*|\b(?:personalized service|individual approach|consultation\w*|free|turnkey|our specialists|we will help)\b/iu],
+  ['SERVICE',/(?:^|[^\p{L}])(?:монтаж\p{L}*|монтир\p{L}*|смонтир\p{L}*|достав\p{L}*|замер\p{L}*|измер\p{L}*|консульт\p{L}*|проектир\p{L}*|спроектир\p{L}*|установ\p{L}*|устанавл\p{L}*|сопровожд\p{L}*|сопровод\p{L}*)|\b(?:install\w*|deliver\w*|measurement services?|consult\w*|engineering|support\w*)\b|(?:индивидуальн\p{L}*|персональн\p{L}*)\s+подход|консультаци\p{L}*|бесплатн\p{L}*|сопровождени\p{L}*|под ключ|(?:специалист\p{L}*|мы)\s+помо\p{L}*|\b(?:personalized service|individual approach|consultation\w*|free|turnkey|our specialists|we will help)\b/iu],
   ['SOCIAL_PROOF',/тысяч\p{L}*\s+клиент\p{L}*|довольн\p{L}*\s+клиент\p{L}*|лидер\p{L}*\s+рынк\p{L}*|рекомендуют|высок\p{L}*\s+рейтинг|\b(?:market leader|happy customers|thousands of customers|top rated|number one)\b/iu],
   ['TECHNICAL',/\p{N}|сертификат\p{L}*|ГОСТ|технологи\p{L}*|закал[её]нн\p{L}*|триплекс|алюмини\p{L}*|нержавеющ\p{L}*|\b(?:certified|certificate\w*|ISO|tempered|laminated|aluminium|aluminum|stainless|technology|equipment)\b/iu],
 ];
@@ -43,7 +42,7 @@ const detectors:readonly [string,RegExp][] = [
 const styleOnly = /^(?:(?:профессиональн\p{L}*|экспертн\p{L}*|спокойн\p{L}*|ясн\p{L}*|практичн\p{L}*|понятн\p{L}*|информативн\p{L}*|сдержанн\p{L}*|тон|стиль|текст\p{L}*|и|professional|expert|calm|clear|practical|informative|friendly|concise|tone|of|voice|and)\s*[,; .—-]*)+$/iu;
 
 export function validateContentGrounding(plan:ContentPlan,input:ContentAgentInput):ContentValidationError|undefined {
-  const sources=contentGroundingFacts(input).map(normalize);
+  const sources=contentGroundingFacts(input.confirmedBusinessFacts).map(normalize);
   const fields:[string,string][]=[['pageTitle',plan.pageTitle],['pageGoal',plan.pageGoal],['toneOfVoice',plan.toneOfVoice],...plan.keyMessages.map((s,i):[string,string]=>[`keyMessages[${i}]`,s])];
   if(plan.notes) fields.push(['notes',plan.notes]);
   for(const [i,s] of plan.sections.entries()) {

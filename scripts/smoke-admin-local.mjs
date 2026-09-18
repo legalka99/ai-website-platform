@@ -1,3 +1,5 @@
+import {WorkflowLaunchService} from '../.test-build/apps/api/src/workflow-launch.js';
+import {fakeLaunchFactory} from '../tests/fixtures/launch.mjs';
 // Only invoked by the disposable Docker runner; never seeds a default database.
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -100,6 +102,16 @@ try {
     await api.listen({ host: "127.0.0.1", port: 3001 });
     const writeChild = spawn("npm", ["run", "test:web"], { stdio: "inherit", env: { ...process.env, KLEO_CONSOLE_LIVE: "1", KLEO_CONSOLE_WRITE: "1" } });
     process.exitCode = await new Promise(resolve => { writeChild.on("error", () => resolve(1)); writeChild.on("exit", code => resolve(code ?? 1)); });
+  }
+
+  if (!inspect && process.exitCode === 0) {
+    await api.close();
+    const fake=fakeLaunchFactory({hold:async()=>new Promise(resolve=>setTimeout(resolve,1200))});
+    api=await createApi(await AuthRepository.create(runtime,3600),{production:false,apiOrigin:'http://localhost:3001',origins:['http://localhost:3000'],sessionSeconds:3600,loginLimit:10},{workflows:new WorkflowLaunchService(runtime,fake.factory)});
+    await api.listen({host:'127.0.0.1',port:3001});
+    const launchChild=spawn('npm',['run','test:web'],{stdio:'inherit',env:{...process.env,KLEO_CONSOLE_LIVE:'1',KLEO_CONSOLE_LAUNCH:'1'}});
+    process.exitCode=await new Promise(resolve=>{launchChild.on('error',()=>resolve(1));launchChild.on('exit',code=>resolve(code??1));});
+    if(process.exitCode===0&&fake.calls.length!==5)throw Error('Expected exactly one five-stage fake pipeline');
   }
 
 } catch {

@@ -1,3 +1,4 @@
+import {confirmed} from './fixtures/confirmed-facts.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateContentGrounding,contentGroundingFacts } from '../.test-build/packages/ai/src/validation/content-grounding-validator.js';
@@ -22,8 +23,8 @@ for(const [text,kind] of claims) {
   const error=inspect(text);assert.deepEqual(error,{stage:'content-grounding',path:'sections[0].text',rule:`UNGROUNDED_${kind}_CLAIM`});assert.deepEqual(safeContentValidationError(error),error);assert.ok(!JSON.stringify(error).includes(text));
  });
  test(`same explicit fact passes: ${text}`,()=>{
-  const i=input();i.business.advantages=[text];assert.equal(inspect(text,i),undefined);
-  const explicit=input();explicit.businessFacts=[text];assert.equal(inspect(text,validateContentInput(explicit)),undefined);
+  const i=input();i.business.advantages=[text];i.confirmedBusinessFacts=confirmed({advantages:text});assert.equal(inspect(text,i),undefined);
+  const explicit=input();explicit.businessFacts=[text];explicit.confirmedBusinessFacts=confirmed({advantages:text});assert.equal(inspect(text,validateContentInput(explicit)),undefined);
  });
 }
 for(const text of ['Расскажите о вашей задаче и запросите расчёт.','Можно начать с описания помещения и доступных размеров.','Выбор конструкции зависит от задачи и параметров помещения.','Решение для ванной комнаты.','Заказать конструкцию по индивидуальным параметрам.'])test(`neutral or safe derivation: ${text}`,()=>assert.equal(inspect(text),undefined));
@@ -37,10 +38,10 @@ test('style field cannot hide company promises',()=>{
 });
 test('design, goals, competitors and missing-information notes are not evidence',()=>{
  const i=input();i.design.mood=['Premium','Expert','Fast'];i.design.description='Высокое качество';i.business.websiteGoals=['Высокое качество'];i.business.competitors=['Высокое качество'];i.business.notes='Высокое качество';
- assert.ok(inspect('Высокое качество',i));assert.ok(!contentGroundingFacts(i).includes('Высокое качество'));
+ assert.ok(inspect('Высокое качество',i));assert.ok(!contentGroundingFacts(i.confirmedBusinessFacts).includes('Высокое качество'));
 });
 test('no evidence pooling, changed numbers, stripped conditions, negated facts or substrings',()=>{
- for(const [fact,text] of [['Гарантия 2 года','Гарантия 5 лет'],['Высокое качество при соблюдении условий','Высокое качество'],['Не гарантируем качество','Гарантируем качество'],['Нет гарантии','Гарантия'],['Невысокое качество','Высокое качество']]) {const i=input();i.business.advantages=[fact];assert.ok(inspect(text,i));}
+ for(const [fact,text] of [['Гарантия 2 года','Гарантия 5 лет'],['Высокое качество при соблюдении условий','Высокое качество'],['Не гарантируем качество','Гарантируем качество'],['Нет гарантии','Гарантия'],['Невысокое качество','Высокое качество']]) {const i=input();i.business.advantages=[fact];i.confirmedBusinessFacts=confirmed({advantages:fact});assert.ok(inspect(text,i));}
 });
 test('claim validation covers every copy and metadata path before state storage',()=>{
  const edits=[['pageTitle',p=>p.pageTitle='Высокое качество'],['pageGoal',p=>p.pageGoal='Высокое качество'],['keyMessages[0]',p=>p.keyMessages[0]='Высокое качество'],['sections[0].purpose',p=>p.sections[0].purpose='Высокое качество'],['sections[0].heading',p=>p.sections[0].heading='Высокое качество'],['sections[0].points[0]',p=>p.sections[0].points=['Высокое качество']]];
@@ -63,7 +64,7 @@ for(const provider of ['openai','yandex'])for(const bad of [false,true])test(`of
    return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
   }});
   assert.equal(calls,1);assert.equal(exit,bad?1:0);const result=JSON.parse(lines[0]);assert.equal(result.usage.totalTokens,5);assert.equal(result.routing.attempts[0].outcome,'success');
-  if(bad){assert.equal(result.errorCode,'INVALID_RESPONSE');assert.equal(result.validationError.stage,'content-grounding');assert.equal(result.content,undefined);assert.ok(!lines[0].includes('Высокое качество'));}
+  if(bad){assert.equal(result.errorCode,'INVALID_RESPONSE');assert.equal(result.budget.requests,1);assert.equal(result.routing.attempts.length,1);assert.equal(result.content,undefined);assert.ok(!lines[0].includes('Высокое качество'));}
   for(const marker of ['TEST_ONLY_GROUNDING','Authorization','[CIRCULAR]'])assert.ok(!lines[0].includes(marker));
  }finally{globalThis.fetch=original;}
 });

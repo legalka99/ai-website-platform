@@ -51,3 +51,18 @@ test('workflow rejects unsafe design before content and preserves Business state
  const result=await new WebsiteWorkflowOrchestrator(agents).run({projectId:'project-1',goal:'Create page',input:{}});
  assert.equal(result.success,false);assert.deepEqual(result.state.business,outputs.business);assert.equal(result.state.design,undefined);assert.equal(contentCalled,false);assert.ok(!result.error.includes('https://example.com'));
 });
+
+for(const text of ['Вариант № 2 — нейтральный гротеск','Читаемый гротеск • свободный интервал','Спокойный ритм… мягкие акценты','Вариант № 1 • ясный гротеск… без засечек'])test('typography accepts explicit safe typographic punctuation',()=>{
+ const d=valid();d.typography={headingStyle:text,bodyStyle:text};
+ assert.deepEqual(validateDesignDirection(d),{valid:true,issues:[]});
+ assert.equal(validateWebsiteAgentOutput('design',d,'project-1').valid,true);
+});
+test('typographic additions cannot bypass existing security detectors or leak rejected text',()=>{
+ for(const text of ['<b>Readable</b>','color: red','font-weight: 700','const value = 1','https://example.com','password: TEST_ONLY_PRIVATE_VALUE','sk-'+'a'.repeat(25),'echo hello','a && b','a || b','a; b','a & b','a / b','a % b','%3Cscript%3E','&lt;script&gt;','a \u005c\u005c b','a `b`','a {b}','a [b]','a < b','a > b','a = b','a $b','a * b','a # b','a ~ b','a ^ b']){
+  const value='Вариант № 1 • '+text+'…';
+  const d=valid();d.typography.bodyStyle=value;
+  const result=rejected(d);
+  assert.ok(result.issues.some(i=>i.code==='UNSAFE_DESIGN_TEXT'&&i.field==='design.typography.bodyStyle'));
+  assert.ok(!JSON.stringify(result).includes(value));
+ }
+});

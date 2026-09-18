@@ -1,3 +1,4 @@
+import { safeDesignDiagnostic, wireDiagnostic, designWireFailure } from '../contracts/design-diagnostic.js';
 import type { AgentContext, AgentResult } from '../agent.js';
 import type { DesignAgent } from './design-agent.js';
 import type { DesignAgentInput } from '../contracts/design-agent-input.js';
@@ -42,16 +43,20 @@ export class DefaultDesignAgent implements DesignAgent {
       execution.usage=response.usageRecord;
       execution.routing=response.routing;
       execution.budget=response.budget;
+      let wire=response.structured;
+      if(wire===undefined) {
+        if(typeof response.content!=='string') {execution.designDiagnostic=wireDiagnostic('WIRE_SHAPE_INVALID');throw new AIProviderError('INVALID_RESPONSE');}
+        if(response.content.length>24000) {execution.designDiagnostic=wireDiagnostic('WIRE_RESOURCE_LIMIT');throw new AIProviderError('INVALID_RESPONSE');}
+        try {wire=JSON.parse(response.content);} catch {execution.designDiagnostic=wireDiagnostic('WIRE_PARSE_FAILED');throw new AIProviderError('INVALID_RESPONSE');}
+      }
       let output:unknown;
-      try {
-        let wire=response.structured;
-        if(wire===undefined) {
-          if(typeof response.content!=='string'||response.content.length>24000) throw new Error();
-          wire=JSON.parse(response.content);
-        }
-        output=normalizeDesignWire(wire);
-      } catch {throw new AIProviderError('INVALID_RESPONSE');}
-      if(!validateDesignDirection(output).valid) throw new AIProviderError('INVALID_RESPONSE');
+      try {output=normalizeDesignWire(wire);}
+      catch {execution.designDiagnostic=wireDiagnostic(designWireFailure(wire));throw new AIProviderError('INVALID_RESPONSE');}
+      const validation=validateDesignDirection(output);
+      if(!validation.valid) {
+        execution.designDiagnostic=safeDesignDiagnostic({stage:'design-domain',issues:validation.issues})??{stage:'design-domain',issues:[{code:'INVALID_OUTPUT',field:'design'}]};
+        throw new AIProviderError('INVALID_RESPONSE');
+      }
       return {success:true,output:output as DesignDirection,execution};
     } catch(error) {
       if(execution && (error instanceof AIRoutingError || error instanceof AIRoutingSecurityError)) execution.routing=error.routing;

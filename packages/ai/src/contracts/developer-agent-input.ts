@@ -7,5 +7,6 @@ export interface DeveloperAgentInput {
   design: DesignDirection;
   content: ContentPlan;
   /** Optional explicit confirmed facts, same bounds as Content input. */
-  businessFacts?: string[];
+  businessFacts?: string[]; // Legacy descriptive data only; never grounding evidence.
+  confirmedBusinessFacts?: import('../../../core/src/confirmed-business-facts.js').ConfirmedBusinessFacts;
 }

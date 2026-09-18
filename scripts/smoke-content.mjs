@@ -46,7 +46,7 @@ export function contentSmokeOutput(result,context,provider,model,knownSecrets=[]
     requestId:execution?.usage?.requestId,usage:usage(execution?.usage),
     routing:routing?{decision:{...strings(decision,['provider','model','reason','policyId','policyVersion']),
       fallbackProviders:Array.isArray(decision?.fallbackProviders)?decision.fallbackProviders.filter(id=>['openai','yandex'].includes(id)).slice(0,1):[]},
-      attempts:Array.isArray(routing.attempts)?routing.attempts.slice(0,2).map(a=>({...strings(a,['provider','model','outcome','errorCode']),usage:usage(a.usage)})):[]}:undefined,
+      attempts:Array.isArray(routing.attempts)?routing.attempts.slice(0,4).map(a=>({...strings(a,['provider','model','outcome','errorCode']),usage:usage(a.usage)})):[]}:undefined,
     budget:execution?.budget?{...strings(execution.budget,['projectId','workflowId']),...numbers(execution.budget,['maxOutputTokens','reservedOutputTokens','requests','maxRequests'])}:undefined};
   return JSON.stringify(redact(data,knownSecrets),null,2);
 }

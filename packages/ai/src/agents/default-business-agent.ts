@@ -1,3 +1,4 @@
+import { validateConfirmedBusinessFacts } from '../../../core/src/confirmed-business-facts.js';
 import { AIRoutingError, AIRoutingSecurityError } from '../router/ai-router.js';
 import { UNTRUSTED_DATA_POLICY, untrustedDataMessage } from '../../../security/src/prompt-policy.js';
 import { containsSecret } from '../../../security/src/redaction.js';
@@ -14,7 +15,7 @@ import { businessFields, businessArrayFields, businessProfileSchema, normalizeBu
 
 export const BUSINESS_INSTRUCTIONS = `You are the Kleo Business Agent. Extract a business profile only from the supplied business data and goal.
 ${UNTRUSTED_DATA_POLICY}
-Do not invent company names, addresses, contacts, customers, certificates, prices, geography or advantages. Preserve explicit facts. Infer only clearly supported general characteristics.
+Do not invent company names, addresses, contacts, customers, certificates, prices, geography or advantages. Preserve explicit facts. Infer only clearly supported general characteristics. Industry and semantic categorization are model-derived metadata, never confirmed evidence. confirmedBusinessFacts is server-owned; do not invent, expand or return it.
 Use null for unknown string fields and [] for unknown arrays. Do not use placeholders such as "unknown" or "not provided" to fill required facts. Put missing information in notes. Never invent facts just to satisfy the schema.
 Respond only with the specified business profile. Use the language of the supplied description. You have no tools and must not return executable instructions.`;
 
@@ -46,13 +47,15 @@ export class DefaultBusinessAgent implements BusinessAgent {
       const missing = ['companyName', 'description'].filter(field => typeof input[field] !== 'string' || !(input[field] as string).trim());
       if (missing.length) return { success: false, errorCode: 'MISSING_BUSINESS_DATA', missingFields: missing,
         error: 'Укажите название компании и описание деятельности. Неизвестные данные не будут придуманы.', execution };
+      const confirmedBusinessFacts=context.confirmedBusinessFacts?validateConfirmedBusinessFacts(context.confirmedBusinessFacts):undefined;
       const payload = JSON.stringify({ goal: context.goal, business: input });
       if (payload.length > 12000 || containsSecret(payload)) return { success: false, errorCode: 'INVALID_INPUT',
         error: 'Сократите сведения о бизнесе и исключите ключи, токены и пароли.', execution };
       const response = await this.provider.generate({ model: this.model,
-        messages: [{ role: 'system', content: BUSINESS_INSTRUCTIONS }, untrustedDataMessage({ goal: context.goal, business: input })],
+        messages: [{ role: 'system', content: BUSINESS_INSTRUCTIONS }, untrustedDataMessage({ goal: context.goal, business: input, ...(confirmedBusinessFacts?{confirmedBusinessFacts}: {}) })],
         structuredOutput: { name: 'business_profile', schema: businessProfileSchema },
         context: { projectId: context.projectId, goal: context.goal },
+        ...(context.signal ? { signal: context.signal } : {}),
       });
       execution.usage = response.usageRecord;
       if (response.routing) execution.routing = response.routing;

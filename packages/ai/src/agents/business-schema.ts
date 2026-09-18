@@ -17,7 +17,8 @@ export const businessProfileSchema = {
 export function normalizeBusinessProfile(wire: Record<string, unknown>, input: Record<string, unknown>): Partial<BusinessProfile> {
   const profile: Record<string, unknown> = {};
   for (const key of businessFields) if (wire[key] !== null) profile[key] = wire[key];
-  // Explicit facts always win. Optional claims cannot originate solely from the model.
+  // Explicit owner inputs win. Remaining inferred values (including industry) are
+  // model-derived profile metadata, never ConfirmedBusinessFacts or grounding evidence.
   for (const key of businessStringFields) {
     if (typeof input[key] === 'string' && input[key].trim()) profile[key] = input[key];
   }

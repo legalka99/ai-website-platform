@@ -1,3 +1,4 @@
+import {confirmed} from './fixtures/confirmed-facts.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { developerInput,layout } from './fixtures/developer.mjs';
@@ -29,7 +30,7 @@ for(const [name,mutate] of [
  ['bad color',i=>i.design.colors.primary='red'],['css',i=>i.design.typography.headingStyle='url(https://evil.example)'],['style',i=>i.design.notes='<style>body</style>'],['font URL',i=>i.design.typography.bodyStyle='https://font.example'],['credential',i=>i.content.sections[0].text='password: TEST_ONLY'],['oversized',i=>i.design.description='a'.repeat(2001)],['ungrounded',i=>i.content.sections[0].text='High quality'],['new CTA',i=>i.content.sections[0].callToAction='Buy now'],['extra',i=>i.projectId='other'],['missing',i=>delete i.content]
 ])test(`Developer input rejected: ${name}`,()=>{const i=developerInput();mutate(i);assert.throws(()=>validateDeveloperInput(i));});
 test('confirmed facts remain allowed through Developer',()=>{
- const i=developerInput();i.businessFacts=['Гарантия 5 лет'];i.content.sections[0].text='Гарантия 5 лет';const valid=validateDeveloperInput(i);assert.equal(validateDeveloperOutput(buildDeveloperWebsite(valid,layout(),'project-1'),'project-1').valid,true);
+ const i=developerInput();i.confirmedBusinessFacts=confirmed({advantages:'Гарантия 5 лет'});i.content.sections[0].text='Гарантия 5 лет';const valid=validateDeveloperInput(i);assert.equal(validateDeveloperOutput(buildDeveloperWebsite(valid,layout(),'project-1'),'project-1').valid,true);
 });
 for(const bad of [{},{sections:[]},{sections:[{sectionIndex:0,alignment:'center',text:'High quality'}]},{sections:[{sectionIndex:1,alignment:'left'}]},{sections:[{sectionIndex:0,alignment:'url(evil)'}]}, {...layout(),projectId:'other'},{...layout(),status:'published'}])test('strict layout rejects extra fields, bad references and unsafe enums',()=>assert.ok(validateDeveloperProposal(bad,1)));
 test('layout cannot duplicate, omit or reorder references',()=>{

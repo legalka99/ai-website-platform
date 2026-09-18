@@ -103,6 +103,8 @@ async function mock(page, options = {}) {
     if (options.delay)
       await new Promise((resolve) => setTimeout(resolve, options.delay));
     if (url.pathname === "/health") return send({ status: "ok" });
+    if (url.pathname.endsWith('/workflow-state')) return send({available:false,run:null,limits:{maxOutputTokens:4000,maxWorkflowOutputTokens:40000,maxRequestsPerWorkflow:10,timeoutMs:600000}});
+    if (url.pathname.endsWith('/brief')) return send({snapshot:null});
     if (url.pathname.endsWith("/dashboard")) return send(dashboard);
     if (url.pathname.endsWith("/" + id))
       return send({
@@ -662,3 +664,30 @@ test('create form blocks duplicate submit and reuses operation ID after uncertai
  await page.getByRole('button',{name:'Создать организацию',exact:true}).click();await expect(page.getByRole('button',{name:'Создать организацию',exact:true})).toBeEnabled();expect(bodies).toHaveLength(2);expect(bodies[0].operationId).toBe(bodies[1].operationId);
  await expect(page.locator('body')).not.toContainText('PRIVATE_SQL_ERROR');await expect(page.getByLabel('Название организации')).toHaveValue('Клиент');
 });
+
+const launchLimits={maxOutputTokens:4000,maxWorkflowOutputTokens:40000,maxRequestsPerWorkflow:10,timeoutMs:600000};
+const launchRun=(state='running')=>({id,projectId:id,briefVersionId:org,briefVersion:1,status:state,startedAt:new Date().toISOString(),completedAt:state==='running'?null:new Date().toISOString(),deadlineAt:new Date(Date.now()+600000).toISOString(),failureCode:state==='failed'?'BUDGET_EXCEEDED':null,stages:['business','design','content','developer','qa'].map((stage,i)=>({stage,status:state==='running'?(i===0?'running':'waiting'):'completed'})),websiteId:id,versionId:state==='completed'||state==='qa_failed'?id:null,qaId:state==='completed'||state==='qa_failed'?id:null});
+async function launchMock(page,{role='platform_owner',initial=null,fail=false}={}){
+ await mock(page,{role});let run=initial,posts=0,finish;const wait=new Promise(resolve=>finish=resolve);const bodies=[];
+ const send=(route,body,status=200)=>route.fulfill({status,contentType:'application/json',headers:{'access-control-allow-origin':'http://localhost:3000','access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET, POST'},body:JSON.stringify(body)});
+ await page.route('**/api/v1/admin/projects/*/brief',route=>send(route,{snapshot:{id:org,projectId:id,organizationId:org,version:1,brief:{companyName:'Example'}}}));
+ await page.route('**/api/v1/admin/projects/*/workflow-state*',route=>send(route,{available:true,limits:launchLimits,run}));
+ await page.route('**/api/v1/admin/projects/*/workflows',async route=>{
+  if(route.request().method()==='OPTIONS')return send(route,{});
+  posts++;bodies.push(route.request().postDataJSON());if(fail)return send(route,{error:{message:'RAW_PROVIDER_SECRET'}},503);
+  run=launchRun();await wait;run=launchRun('completed');return send(route,{runId:id},201);
+ });
+ return {posts:()=>posts,bodies,finish,terminal:state=>{run=launchRun(state);}};
+}
+test('workflow confirmation cancel does not POST; confirmed launch sends only selectors and blocks double click',async({page})=>{
+ const x=await launchMock(page);await page.goto(`/admin/projects/${id}`);const button=page.getByRole('button',{name:'Запустить создание сайта',exact:true});await button.click();await expect(page.getByRole('dialog')).toContainText('40');await page.getByRole('button',{name:'Отмена',exact:true}).click();expect(x.posts()).toBe(0);
+ await button.click();await page.getByRole('dialog').getByRole('button',{name:'Запустить',exact:true}).dblclick();await expect(page.getByRole('dialog').getByRole('button',{name:'Запуск…',exact:true})).toBeDisabled();expect(x.posts()).toBe(1);expect(Object.keys(x.bodies[0]).sort()).toEqual(['briefVersionId','idempotencyKey']);expect(x.bodies[0].briefVersionId).toBe(org);x.finish();await expect(page.getByRole('region',{name:'Создание сайта'})).toContainText('Создание сайта завершено');
+});
+test('workflow refresh shows persisted active run and prohibits launch, terminal polling stops',async({page})=>{
+ const x=await launchMock(page,{initial:launchRun()});await page.goto(`/admin/projects/${id}`);await expect(page.getByRole('button',{name:'Запустить создание сайта',exact:true})).toBeDisabled();await page.reload();await expect(page.getByRole('region',{name:'Создание сайта'})).toContainText('Создание сайта выполняется');x.terminal('completed');await expect(page.getByRole('region',{name:'Создание сайта'})).toContainText('5 из 5 этапов завершены',{timeout:7000});expect(x.posts()).toBe(0);await expect(page.getByRole('link',{name:'Открыть версию сайта'})).toBeVisible();
+});
+for(const state of ['qa_failed','failed'])test(`workflow ${state} has honest safe terminal message and no preview`,async({page})=>{
+ await launchMock(page,{initial:launchRun(state)});await page.goto(`/admin/projects/${id}`);const region=page.getByRole('region',{name:'Создание сайта'});await expect(region).toContainText(state==='qa_failed'?'QA не пройден':'Превышен лимит выполнения.');await expect(page.getByRole('button',{name:/Preview|Предпросмотр/})).toHaveCount(0);
+});
+test('workflow platform admin cannot launch',async({page})=>{const x=await launchMock(page,{role:'platform_admin'});await page.goto(`/admin/projects/${id}`);await expect(page.getByRole('region',{name:'Создание сайта'})).toBeVisible();await expect(page.getByRole('button',{name:'Запустить создание сайта',exact:true})).toHaveCount(0);expect(x.posts()).toBe(0);});
+test('workflow raw launch failure never reaches UI',async({page})=>{await launchMock(page,{fail:true});await page.goto(`/admin/projects/${id}`);await page.getByRole('button',{name:'Запустить создание сайта',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Запустить',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Не удалось запустить процесс.');await expect(page.locator('body')).not.toContainText('RAW_PROVIDER_SECRET');});

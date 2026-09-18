@@ -18,9 +18,9 @@ export function developerLayoutSchema(sectionCount:number):Record<string,unknown
 }
 export function validateDeveloperInput(value:unknown):DeveloperAgentInput {
   validateExternal(value,plainJSON,{maxBytes:52000,maxString:8000,maxArray:50,maxDepth:6,maxNodes:1000});
-  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['business','design','content','businessFacts'].includes(k))) throw new SecurityError('INVALID_INPUT');
+  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['business','design','content','businessFacts','confirmedBusinessFacts'].includes(k))) throw new SecurityError('INVALID_INPUT');
   const input=value as DeveloperAgentInput;
-  const authority=validateContentInput({business:input.business,design:input.design,...(input.businessFacts===undefined?{}:{businessFacts:input.businessFacts})});
+  const authority=validateContentInput({business:input.business,design:input.design,...(input.confirmedBusinessFacts?{confirmedBusinessFacts:input.confirmedBusinessFacts}:{}),...(input.businessFacts===undefined?{}:{businessFacts:input.businessFacts})});
   if(!validateContentPlan(input.content).valid||validateContentGrounding(input.content,authority)) throw new SecurityError('INVALID_INPUT');
   return structuredClone(input);
 }

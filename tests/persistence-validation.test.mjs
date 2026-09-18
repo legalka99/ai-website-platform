@@ -15,3 +15,12 @@ test('telemetry excludes unknown data and rejects credentials and negative count
  assert.deepEqual(telemetry(e,s,run,'qa'),[{provider:'openai',model:'test',outcome:'unknown',totalTokens:2}]);e.usage.totalTokens=-1;assert.throws(()=>telemetry(e,s,run,'qa'));e.usage.totalTokens=1;e.usage.model='password: TEST_ONLY';assert.throws(()=>telemetry(e,s,run,'qa'));
 });
 test('persistence failure does not rerun AI or report durable success',async()=>{const s={actorId:randomUUID(),organizationId:randomUUID(),projectId:randomUUID()};let calls=0;const store={async startRun(){return {id:randomUUID()};},async finishRun(){throw Error('Database failure');}};await assert.rejects(runPersistedWorkflow(store,s,{goal:'Build',input:{}},async()=>({async run(){calls++;return {success:false,state:{}};}})));assert.equal(calls,1);});
+test('Content permits at most four scoped usage rows, other stages retain two',()=>{
+ const s={actorId:randomUUID(),organizationId:randomUUID(),projectId:randomUUID()},run=randomUUID();
+ const attempts=Array.from({length:4},()=>({provider:'openai',model:'test',outcome:'success',usage:{...s,workflowId:run,agentType:'content',provider:'openai',model:'test',totalTokens:3}}));
+ const e={projectId:s.projectId,routing:{attempts}};
+ assert.equal(telemetry(e,s,run,'content').length,4);
+ assert.throws(()=>telemetry(e,s,run,'qa'));
+ attempts[3].usage.projectId=randomUUID();assert.throws(()=>telemetry(e,s,run,'content'));
+ attempts[3].usage.projectId=s.projectId;attempts.push(attempts[0]);assert.throws(()=>telemetry(e,s,run,'content'));
+});

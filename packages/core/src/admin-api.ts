@@ -31,6 +31,7 @@ export interface AdminRow {
   website_id?: string;
   website_version_id?: string;
   workflow_run_id?: string;
+  source_brief_version_id?: string | null;
   created_at?: string;
   updated_at?: string;
   started_at?: string;

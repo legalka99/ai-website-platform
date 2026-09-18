@@ -24,3 +24,12 @@ export class AuthorizationPolicy {
 export interface ProjectBound { projectId: string }
 export interface ProjectUsage extends ProjectBound { workflowId: string; provider: string; totalTokens?: number }
 export interface ProjectWorkflow extends ProjectBound { id: string; organizationId: string }
+
+/** Construct only after server DB owner authorization. Grants one action in one scope. */
+export class OwnerGenerationPolicy extends AuthorizationPolicy {
+  constructor(private readonly ownerId: string, private readonly scope: ProjectResource) { super([]); }
+  override authorize(actor: Actor, action: Permission, resource: ProjectResource): boolean {
+    return actor.authenticated === true && actor.id === this.ownerId && action === 'generate' &&
+      resource.projectId === this.scope.projectId && resource.organizationId === this.scope.organizationId;
+  }
+}

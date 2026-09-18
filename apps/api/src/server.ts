@@ -1,3 +1,6 @@
+import {prepareOwnerWorkflow,ownerWorkflowView} from '../../../packages/persistence/src/owner-workflow.js';
+import {WORKFLOW_LIMITS} from '../../../packages/core/src/workflow-launch.js';
+import type {WorkflowLaunchService} from './workflow-launch.js';
 import { createOrganization, createOwnerProject, saveBusinessBrief, getBusinessBrief } from '../../../packages/persistence/src/owner-writes.js';
 import { briefFields } from '../../../packages/core/src/business-brief.js';
 import Fastify from 'fastify';
@@ -17,7 +20,7 @@ const object=(properties:Record<string,unknown>,required=Object.keys(properties)
 const paging={limit:{type:'string',pattern:'^(?:[1-9]|[1-4][0-9]|50)$'},offset:{type:'string',pattern:'^(?:0|[1-9][0-9]{0,3}|10000)$'}};
 const page=(query:any):Page=>({limit:Number(query.limit??20),offset:Number(query.offset??0)});
 export interface SafeRequestLog {requestId:string;method:string;route:string;status:number}
-export async function createApi(auth:AuthRepository,config:ApiConfig,options:{https?:ServerOptions;log?:(entry:SafeRequestLog)=>void}={}){
+export async function createApi(auth:AuthRepository,config:ApiConfig,options:{workflows?:WorkflowLaunchService;https?:ServerOptions;log?:(entry:SafeRequestLog)=>void}={}){
  const c=validateConfig(config),security=httpSecurityDefaults(c.production,c.origins),limiter=new InMemoryRateLimiter();
  const app=Fastify({logger:false,trustProxy:false,requestIdHeader:false,genReqId:()=>randomUUID(),bodyLimit:8192,requestTimeout:15000,connectionTimeout:10000,keepAliveTimeout:5000,
   ajv:{customOptions:{removeAdditional:false,coerceTypes:false,useDefaults:false}},...(options.https?{https:options.https}:{})});
@@ -99,6 +102,16 @@ export async function createApi(auth:AuthRepository,config:ApiConfig,options:{ht
  app.post('/api/v1/admin/organizations/:organizationId/projects',{schema:{querystring:emptyQuery,params:object({organizationId:id}),body:nameBody}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return createOwnerProject(db,actor,(req.params as {organizationId:string}).organizationId,req.body,req.id);}));
  app.get('/api/v1/admin/projects/:projectId/brief',{schema:{querystring:emptyQuery,params:object({projectId:id})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'admin',30);return getBusinessBrief(auth,db,actor,(req.params as {projectId:string}).projectId,req.id);}));
  app.post('/api/v1/admin/projects/:projectId/brief',{bodyLimit:32768,schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({operationId:id,organizationId:id,expectedVersion:{type:'integer',minimum:0,maximum:1000000},brief:object(Object.fromEntries(Object.entries(briefFields).map(([key,f])=>[key,{type:f.required?'string':['string','null'],maxLength:f.max}])))})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return saveBusinessBrief(db,actor,(req.params as {projectId:string}).projectId,req.body,req.id);}));
- // Public registration, role mutation, publishing and AI execution have no routes.
+ app.post('/api/v1/admin/projects/:projectId/workflows',{schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({briefVersionId:id,idempotencyKey:id})}},async(req,reply)=>{
+  const projectId=(req.params as {projectId:string}).projectId;
+  const launch=await session(req,async(db,actor)=>{rate('actor',actor.userId,'workflow-launch',5);return prepareOwnerWorkflow(db,actor,projectId,req.body,req.id,!!options.workflows);}) as Awaited<ReturnType<typeof prepareOwnerWorkflow>>;
+  // Release authenticated DB transaction before awaiting any provider. Browser disconnect is not cancellation.
+  if(launch.created){req.raw.socket.setTimeout?.(WORKFLOW_LIMITS.timeoutMs+30000);try{await options.workflows!.execute(launch);}catch{throw new AuthError('UNAVAILABLE');}}
+  reply.code(launch.created?201:200);return {runId:launch.runId};
+ });
+ app.get('/api/v1/admin/projects/:projectId/workflow-state',{schema:{params:object({projectId:id}),querystring:object({workflowId:id},[])}},req=>session(req,async(db,actor)=>{
+  rate('actor',actor.userId,'workflow-status',20);return {available:!!options.workflows,limits:WORKFLOW_LIMITS,run:await ownerWorkflowView(auth,db,actor,(req.params as {projectId:string}).projectId,req.id,(req.query as {workflowId?:string}).workflowId)};
+ }));
+ // Public registration, role mutation and publishing have no routes.
  await app.ready();return app;
 }
