@@ -127,8 +127,9 @@ for(const supported of [false,true])test(`Content service claim ${field}: explic
  else wire.sections[0][field.split('.').at(-1)]=claim;
  const opts=options('openai',undefined,wire);
  const r=await(await createRoutedContentService(opts)).run(context);
- assert.equal(r.success,supported);
- if(!supported){
+ const internal=field==='keyMessages[2]'||field==='sections[0].purpose';
+ assert.equal(r.success,supported||internal);
+ if(!supported&&!internal){
   assert.equal(r.errorCode,'INVALID_RESPONSE');
   assert.deepEqual(r.validationError,{stage:'content-grounding',path:field,rule:'UNGROUNDED_SERVICE_CLAIM'});
   assert.equal(r.output,undefined);assert.ok(!JSON.stringify(r.validationError).includes(claim));
@@ -155,7 +156,7 @@ test('Content prompt uses factual evidence only; product copy and CTA do not ass
  const r=await(await createRoutedContentService(opts)).run(context);
  assert.equal(seen,true);assert.equal(r.success,true);
  assert.deepEqual(r.output.keyMessages,['Стеклянные перегородки']);
- for(const instruction of ['groundingFacts is the only allowed evidence source','every keyMessages item','CTA-supporting copy','A product being offered does not establish any associated service','omit the claim entirely','desiredActions authorizes only the verbatim CTA label','монтаж','замер','доставка','консультация','проектирование','производство','сопровождение'])assert.ok(CONTENT_INSTRUCTIONS.includes(instruction));
+ for(const instruction of ['groundingFacts is the only allowed evidence source','are INTERNAL strategy','CTA-supporting copy','A product being offered does not establish any associated service','omit the claim entirely','desiredActions authorizes only the verbatim CTA label','монтаж','замер','доставка','консультация','проектирование','производство','сопровождение'])assert.ok(CONTENT_INSTRUCTIONS.includes(instruction));
 });
 
 for(const mode of ['success','invalid','schema','security','cta','budget','cancel','fallback'])test(`one Content grounding correction: ${mode}`,async()=>{
@@ -195,7 +196,7 @@ test('Content correction counts toward unchanged Workflow Launch request limit',
  assert.equal(WORKFLOW_LIMITS.maxRequestsPerWorkflow,10);
  const opts=options('openai');opts.costs=new AICostGuard({...DEFAULT_AI_LIMITS,...WORKFLOW_LIMITS,requestsPerMinute:20});
  for(let i=0;i<9;i++)opts.costs.reserve(ctx.projectId,ctx.workflowId,1000).release();
- const bad=businessWire();bad.keyMessages=['Consultation'];let calls=0;
+ const bad=businessWire();bad.sections[0].text='Consultation';let calls=0;
  opts.providers.find(p=>p.id==='openai').testAdapter=new FakeProvider(req=>{calls++;return {model:req.model,structured:bad,content:JSON.stringify(bad)};});
  const r=await(await createRoutedContentService(opts,{allowCorrection:true})).run(businessContext());
  assert.equal(calls,1);assert.equal(r.errorCode,'LIMIT_EXCEEDED');assert.equal(r.execution.budget.requests,10);

@@ -5,7 +5,7 @@ import { GuardedAIProvider } from '../services/guarded-provider.js';
 import { SecurityError } from '../../../security/src/errors.js';
 import { ProviderHealthTracker } from './health.js';
 import { providerId } from './policy.js';
-import type { ProviderMetadata, RouterPolicy, RouteContext, ProviderDecision, ProviderAttempt, RoutingRecord, Capability } from './types.js';
+import type { ProviderMetadata, RouterPolicy, RouteContext, ProviderDecision, ProviderAttempt, RoutingRecord, Capability, RoutingTaskType } from './types.js';
 export interface RouterBinding { metadata:ProviderMetadata; provider:GuardedAIProvider }
 
 /** Detached diagnostic snapshot: never copy extra provider fields or nested references.
@@ -39,7 +39,7 @@ export class AIRoutingError extends AIProviderError {
 /** Contains guarded endpoints only, no credentials, environment, URLs or tools. */
 export class AIRouter implements AIProvider {
   #bindings:RouterBinding[]; #policy:RouterPolicy; #health:ProviderHealthTracker;
-  constructor(bindings:readonly RouterBinding[], policy:RouterPolicy, private readonly taskType:AgentType='business', health=new ProviderHealthTracker()) {
+  constructor(bindings:readonly RouterBinding[], policy:RouterPolicy, private readonly taskType:RoutingTaskType='business', health=new ProviderHealthTracker()) {
     this.#health=health;
     if(!/^[a-zA-Z0-9_-]{1,64}$/.test(policy.id) || !/^[a-zA-Z0-9_.-]{1,32}$/.test(policy.version) || ![1,2].includes(policy.maxAttempts) || !Object.hasOwn(policy.tasks,taskType)) throw new AIProviderError('INVALID_CONFIG');
     this.#bindings=bindings.map(b=>{

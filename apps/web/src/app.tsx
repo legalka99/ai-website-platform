@@ -1,3 +1,4 @@
+import {BlockCreation} from './block-creation.js';
 import { WorkflowLaunch } from "./workflow-launch.js";
 import { CreateResource, BriefPage, BriefSummary } from "./owner-forms.js";
 import { useEffect, useState, type FormEvent } from "react";
@@ -465,6 +466,7 @@ function DetailPage({
           </section>
           {kind === "projects" && <>
             {detailParams.get("briefSaved") === "1" && <p role="status">Бриф сохранён. Актуальные данные показаны ниже.</p>}
+            <BlockCreation key={`block-${id}`} projectId={id!} owner={owner} active={r.data.item.status === "active"} />
             <BriefSummary projectId={id!} owner={owner} />
             <WorkflowLaunch key={id} projectId={id!} name={r.data.item.name ?? "Проект"} active={r.data.item.status === "active"} owner={owner} />
           </>}

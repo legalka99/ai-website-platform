@@ -1,3 +1,4 @@
+import {validateCreativeContext} from '../services/generation-intent.js';
 import { validateConfirmedBusinessFacts, type ConfirmedBusinessFacts } from '../../../core/src/confirmed-business-facts.js';
 import { safeContentValidationError, type ContentValidationError } from '../contracts/content-validation-error.js';
 import { safeStageErrorCode, type StageError } from '../contracts/stage-error.js';
@@ -78,9 +79,10 @@ export class WebsiteWorkflowOrchestrator {
 
     try {
       if(task.confirmedBusinessFacts) facts=validateConfirmedBusinessFacts(task.confirmedBusinessFacts);
+      const creativeContext=task.creativeContext===undefined?undefined:validateCreativeContext(task.creativeContext);
       state.business = await execute('business', this.agents.business, task.input);
       state.design = await execute('design', this.agents.design, state.business);
-      state.content = await execute('content', this.agents.content, { business: state.business, design: state.design, ...authority() });
+      state.content = await execute('content', this.agents.content, { business: state.business, design: state.design, ...authority(), ...(creativeContext?{creativeContext}:{}) });
       state.developer = await execute('developer', this.agents.developer, {
         business: state.business, design: state.design, content: state.content, ...authority(),
       });

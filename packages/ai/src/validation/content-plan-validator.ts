@@ -33,6 +33,7 @@ export function validateContentPlan(value:unknown):ContentValidationResult {
   let actions=0,faqs=0;
   for(const [i,s] of plan.sections.entries()) {
     const path=`sections[${i}]`;
+    if(s.type==='advantages'&&(s.points?.length??0)<3) return invalid('An advantages section requires at least three separate points.','content-semantic',`${path}.points`,'ADVANTAGES_POINTS_MIN');
     if(!s.heading&&!s.text&&!s.points?.length) return invalid('Each section needs copy.','content-semantic',path,'SECTION_COPY_REQUIRED');
     if(s.type==='cta'&&!s.callToAction) return invalid('A CTA section requires an action.','content-semantic',`${path}.callToAction`,'CTA_REQUIRED');
     if(s.callToAction&&++actions>4) return invalid('At most four section actions are allowed.','content-semantic',`${path}.callToAction`,'CTA_LIMIT');

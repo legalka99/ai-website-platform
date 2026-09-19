@@ -12,6 +12,16 @@ export const briefFields = {
   notes: { label: "Дополнительные пожелания", max: 2000, required: false },
 } as const;
 export type BriefField = keyof typeof briefFields;
-export type BusinessBrief = Record<BriefField, string | null>;
+export const BRIEF_ADVANTAGES_MAX_ITEMS = 8;
+export const BRIEF_ADVANTAGE_MAX_LENGTH = 300;
+export const BRIEF_ADVANTAGES_MAX_TOTAL_LENGTH = briefFields.advantages.max;
+export interface BriefAdvantage { readonly text: string }
+/**
+ * New immutable Brief versions use BriefAdvantage[]. A string is retained only
+ * while reading historical JSON documents; it remains one legacy claim until
+ * the owner explicitly saves a new structured version.
+ */
+export type BriefAdvantages = readonly BriefAdvantage[] | string | null;
+export type BusinessBrief = Omit<Record<BriefField, string | null>, 'advantages'> & { advantages: BriefAdvantages };
 export interface BriefSnapshot { id: string; organizationId: string; projectId: string; version: number; createdAt: string; brief: BusinessBrief }
 export interface BriefView { snapshot: BriefSnapshot | null }

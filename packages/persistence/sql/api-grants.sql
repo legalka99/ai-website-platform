@@ -25,3 +25,9 @@ GRANT INSERT ON kleo.workflow_runs,kleo.websites,kleo.website_versions,kleo.qa_r
 GRANT UPDATE(status,result_digest,completed_at,failure_code,current_stage) ON kleo.workflow_runs TO kleo_api;
 GRANT SELECT ON kleo.audit_events TO kleo_api;
 GRANT SELECT(error_code) ON kleo.agent_executions TO kleo_api;
+
+-- Block generation uses scoped canonical page reads and insert-only block versions.
+GRANT SELECT(document) ON kleo.website_versions TO kleo_api;
+GRANT SELECT,INSERT ON kleo.block_pages,kleo.block_runs,kleo.blocks,kleo.block_versions,kleo.block_execution,kleo.block_audit TO kleo_api;
+GRANT UPDATE(status,stage,error_code,completed_at) ON kleo.block_runs TO kleo_api;
+GRANT UPDATE(status,usage) ON kleo.block_execution TO kleo_api;

@@ -1,8 +1,11 @@
+import {prepareBlockPages,prepareBlockRun,blockView,blockVersions} from '../../../packages/persistence/src/block-workflow.js';
+import {BLOCK_TYPES,BLOCK_LIMITS} from '../../../packages/core/src/block-generation.js';
+import type {BlockLaunchService} from './block-launch.js';
 import {prepareOwnerWorkflow,ownerWorkflowView} from '../../../packages/persistence/src/owner-workflow.js';
 import {WORKFLOW_LIMITS} from '../../../packages/core/src/workflow-launch.js';
 import type {WorkflowLaunchService} from './workflow-launch.js';
 import { createOrganization, createOwnerProject, saveBusinessBrief, getBusinessBrief } from '../../../packages/persistence/src/owner-writes.js';
-import { briefFields } from '../../../packages/core/src/business-brief.js';
+import { BRIEF_ADVANTAGES_MAX_ITEMS, BRIEF_ADVANTAGE_MAX_LENGTH, briefFields } from '../../../packages/core/src/business-brief.js';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { randomUUID,createHash } from 'node:crypto';
@@ -20,7 +23,7 @@ const object=(properties:Record<string,unknown>,required=Object.keys(properties)
 const paging={limit:{type:'string',pattern:'^(?:[1-9]|[1-4][0-9]|50)$'},offset:{type:'string',pattern:'^(?:0|[1-9][0-9]{0,3}|10000)$'}};
 const page=(query:any):Page=>({limit:Number(query.limit??20),offset:Number(query.offset??0)});
 export interface SafeRequestLog {requestId:string;method:string;route:string;status:number}
-export async function createApi(auth:AuthRepository,config:ApiConfig,options:{workflows?:WorkflowLaunchService;https?:ServerOptions;log?:(entry:SafeRequestLog)=>void}={}){
+export async function createApi(auth:AuthRepository,config:ApiConfig,options:{blocks?:BlockLaunchService;workflows?:WorkflowLaunchService;https?:ServerOptions;log?:(entry:SafeRequestLog)=>void}={}){
  const c=validateConfig(config),security=httpSecurityDefaults(c.production,c.origins),limiter=new InMemoryRateLimiter();
  const app=Fastify({logger:false,trustProxy:false,requestIdHeader:false,genReqId:()=>randomUUID(),bodyLimit:8192,requestTimeout:15000,connectionTimeout:10000,keepAliveTimeout:5000,
   ajv:{customOptions:{removeAdditional:false,coerceTypes:false,useDefaults:false}},...(options.https?{https:options.https}:{})});
@@ -101,7 +104,8 @@ export async function createApi(auth:AuthRepository,config:ApiConfig,options:{wo
  app.post('/api/v1/admin/organizations',{schema:{querystring:emptyQuery,body:nameBody}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return createOrganization(db,actor,req.body,req.id);}));
  app.post('/api/v1/admin/organizations/:organizationId/projects',{schema:{querystring:emptyQuery,params:object({organizationId:id}),body:nameBody}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return createOwnerProject(db,actor,(req.params as {organizationId:string}).organizationId,req.body,req.id);}));
  app.get('/api/v1/admin/projects/:projectId/brief',{schema:{querystring:emptyQuery,params:object({projectId:id})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'admin',30);return getBusinessBrief(auth,db,actor,(req.params as {projectId:string}).projectId,req.id);}));
- app.post('/api/v1/admin/projects/:projectId/brief',{bodyLimit:32768,schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({operationId:id,organizationId:id,expectedVersion:{type:'integer',minimum:0,maximum:1000000},brief:object(Object.fromEntries(Object.entries(briefFields).map(([key,f])=>[key,{type:f.required?'string':['string','null'],maxLength:f.max}])))})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return saveBusinessBrief(db,actor,(req.params as {projectId:string}).projectId,req.body,req.id);}));
+ const briefProperties=Object.fromEntries(Object.entries(briefFields).map(([key,f])=>[key,key==='advantages'?{type:'array',maxItems:BRIEF_ADVANTAGES_MAX_ITEMS,items:object({text:{type:'string',minLength:1,maxLength:BRIEF_ADVANTAGE_MAX_LENGTH,pattern:'\\S'}})}:{type:f.required?'string':['string','null'],maxLength:f.max}]));
+ app.post('/api/v1/admin/projects/:projectId/brief',{bodyLimit:32768,schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({operationId:id,organizationId:id,expectedVersion:{type:'integer',minimum:0,maximum:1000000},brief:object(briefProperties)})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'owner-write',20);return saveBusinessBrief(db,actor,(req.params as {projectId:string}).projectId,req.body,req.id);}));
  app.post('/api/v1/admin/projects/:projectId/workflows',{schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({briefVersionId:id,idempotencyKey:id})}},async(req,reply)=>{
   const projectId=(req.params as {projectId:string}).projectId;
   const launch=await session(req,async(db,actor)=>{rate('actor',actor.userId,'workflow-launch',5);return prepareOwnerWorkflow(db,actor,projectId,req.body,req.id,!!options.workflows);}) as Awaited<ReturnType<typeof prepareOwnerWorkflow>>;
@@ -112,6 +116,17 @@ export async function createApi(auth:AuthRepository,config:ApiConfig,options:{wo
  app.get('/api/v1/admin/projects/:projectId/workflow-state',{schema:{params:object({projectId:id}),querystring:object({workflowId:id},[])}},req=>session(req,async(db,actor)=>{
   rate('actor',actor.userId,'workflow-status',20);return {available:!!options.workflows,limits:WORKFLOW_LIMITS,run:await ownerWorkflowView(auth,db,actor,(req.params as {projectId:string}).projectId,req.id,(req.query as {workflowId?:string}).workflowId)};
  }));
+ const blockPageId={type:'string',minLength:1,maxLength:200,pattern:'^[A-Za-z0-9_-]+$'};
+ app.post('/api/v1/admin/projects/:projectId/block-pages',{schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({idempotencyKey:id})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'block-launch',5);const result=await prepareBlockPages(db,actor,(req.params as any).projectId,(req.body as any).idempotencyKey);await auth.audit(db,req.id,'block_pages_prepared',actor.userId,'projects',(req.params as any).projectId);return result;}));
+ app.post('/api/v1/admin/projects/:projectId/block-workflows',{schema:{querystring:emptyQuery,params:object({projectId:id}),body:object({pageId:blockPageId,blockId:id,instruction:{type:'string',minLength:1,maxLength:2000},blockType:{type:'string',enum:[...BLOCK_TYPES]},idempotencyKey:id},['pageId','instruction','idempotencyKey'])}},async(req,reply)=>{
+  const launch=await session(req,async(db,actor)=>{rate('actor',actor.userId,'block-launch',5);return prepareBlockRun(db,actor,(req.params as any).projectId,req.body,req.id,!!options.blocks);}) as Awaited<ReturnType<typeof prepareBlockRun>>;
+  let outcome:Awaited<ReturnType<BlockLaunchService['execute']>>;
+  if(launch.created){req.raw.socket.setTimeout?.(BLOCK_LIMITS.timeoutMs+30000);try{outcome=await options.blocks!.execute(launch);}catch{throw new AuthError('UNAVAILABLE');}}
+  if(outcome?.clarification){reply.code(200);return {runId:launch.runId,status:'needs_clarification',clarification:outcome.clarification};}
+  reply.code(launch.created?201:200);return {runId:launch.runId,status:'accepted'};
+ });
+ for(const suffix of ['/block-workflows','/block-workflows/:runId'])app.get('/api/v1/admin/projects/:projectId'+suffix,{schema:{querystring:emptyQuery,params:object({projectId:id,...(suffix.includes(':runId')?{runId:id}:{})})}},req=>session(req,async(db,actor)=>{rate('actor',actor.userId,'block-status',30);return {available:!!options.blocks,...await blockView(db,auth,actor,(req.params as any).projectId,req.id,(req.params as any).runId)};}));
+ for(const suffix of ['/blocks','/blocks/:blockId/versions'])app.get('/api/v1/admin/projects/:projectId'+suffix,{schema:{querystring:emptyQuery,params:object({projectId:id,...(suffix.includes(':blockId')?{blockId:id}:{})})}},req=>session(req,async(db,actor)=>{await auth.audit(db,req.id,'platform_read',actor.userId,'projects',(req.params as any).projectId);return {items:await blockVersions(db,actor,(req.params as any).projectId,(req.params as any).blockId)};}));
  // Public registration, role mutation and publishing have no routes.
  await app.ready();return app;
 }

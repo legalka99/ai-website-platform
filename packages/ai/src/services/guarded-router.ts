@@ -6,7 +6,7 @@ import { readYandexConfig, type YandexProviderConfig } from '../providers/yandex
 import { AIProviderError } from '../providers/errors.js';
 import { GuardedAIProvider, type AIServiceContext } from './guarded-provider.js';
 import { AIRouter, type RouterBinding } from '../router/ai-router.js';
-import type { ProviderCapabilities, RouterPolicy } from '../router/types.js';
+import type { ProviderCapabilities, RouterPolicy, RoutingTaskType } from '../router/types.js';
 import { textCapabilities } from '../router/policy.js';
 import { ProviderHealthTracker } from '../router/health.js';
 import type { AIProvider } from '../provider.js';
@@ -21,7 +21,7 @@ export type RoutedProviderConfig = ({id:'openai';config:Omit<OpenAIProviderConfi
 };
 export interface RoutedServiceOptions {context:AIServiceContext;authorization:AuthorizationPolicy;costs:AICostGuard;secrets:SecretProvider;
   providers:readonly RoutedProviderConfig[];policy:RouterPolicy;health?:ProviderHealthTracker}
-export async function createGuardedRouter(options:RoutedServiceOptions, taskType:AgentType):Promise<AIRouter> {
+export async function createGuardedRouter(options:RoutedServiceOptions, taskType:RoutingTaskType,usageAgentType:AgentType=taskType==='understanding'?'content':taskType):Promise<AIRouter> {
   // Snapshot server configuration across asynchronous secret lookups.
   const context=structuredClone(options.context), policy=structuredClone(options.policy);
   const configs=options.providers.map(p=>({...p,config:{...p.config},credentials:{...p.credentials},capabilities:p.capabilities?{...p.capabilities}:undefined})) as RoutedProviderConfig[];
@@ -41,7 +41,7 @@ export async function createGuardedRouter(options:RoutedServiceOptions, taskType
     }
     const capabilities=p.capabilities ?? textCapabilities(p.config.maxOutputTokens);
     if(capabilities.maxOutputTokens>p.config.maxOutputTokens) throw new AIProviderError('INVALID_CONFIG');
-    bindings.push({metadata:{id:p.id,model,capabilities},provider:new GuardedAIProvider(adapter,context,options.authorization,options.costs,capabilities.maxOutputTokens,taskType)});
+    bindings.push({metadata:{id:p.id,model,capabilities},provider:new GuardedAIProvider(adapter,context,options.authorization,options.costs,capabilities.maxOutputTokens,usageAgentType)});
   }
   return new AIRouter(bindings,policy,taskType,options.health);
 }

@@ -20,7 +20,7 @@ test('migration checksum mismatch fails safely',async()=>{
  const list=await loadMigrations();await assert.rejects(migrate(pool,list.map((m,i)=>i===0?{...m,sql:m.sql+'\n-- changed'}:m)),e=>e.code==='MIGRATION_MISMATCH');
 });
 test('failed migration rolls back DDL and migration record atomically',async()=>{
- await assert.rejects(migrate(pool,[...await loadMigrations(),{name:'006_failure.sql',sql:'CREATE TABLE kleo.rollback_probe(id int); SELECT missing_function();'}]),e=>e.code==='DATABASE_FAILURE');
+ await assert.rejects(migrate(pool,[...await loadMigrations(),{name:'999_failure.sql',sql:'CREATE TABLE kleo.rollback_probe(id int); SELECT missing_function();'}]),e=>e.code==='DATABASE_FAILURE');
  assert.equal((await pool.query("SELECT to_regclass('kleo.rollback_probe') AS table")).rows[0].table,null);assert.equal((await pool.query('SELECT count(*) FROM kleo.schema_migrations')).rows[0].count,String((await loadMigrations()).length));
 });
 test('completed workflow stores snapshots, immutable draft, exact QA version and audit',async()=>{

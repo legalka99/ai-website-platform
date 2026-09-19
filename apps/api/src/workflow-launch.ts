@@ -61,17 +61,22 @@ export class WorkflowLaunchService {
  }
 }
 /** Server-only composition. Disabled unless explicitly configured; never loads or edits .env. */
-export function configuredWorkflowFactory(env:Record<string,string|undefined>):RunnerFactory|undefined {
+export function configuredWorkflowOptionsFactory(env:Record<string,string|undefined>):((scope:PersistenceScope,runId:string,costs:AICostGuard)=>Promise<RoutedServiceOptions>)|undefined {
  if(env.KLEO_WORKFLOW_ENABLED!=='1')return undefined;
  if(!['development','test'].includes(env.NODE_ENV??'development'))throw new Error('Workflow launch requires supported local secret storage');
- const policy=readRouterPolicy(env),route=policy.tasks.business!;
- const ids=[route.preferred,...(route.fallback?[route.fallback]:[])];
- const configs=ids.map(id=>({id,config:id==='openai'?readOpenAIConfig(env):readYandexConfig(env)}));
  return async(scope,runId,costs)=>{
+  const policy=readRouterPolicy(env),route=policy.tasks.business!;
+  const ids=[route.preferred,...(route.fallback?[route.fallback]:[])];
+  const configs=ids.map(id=>({id,config:id==='openai'?readOpenAIConfig(env):readYandexConfig(env)}));
   const context={projectId:scope.projectId,organizationId:scope.organizationId,workflowId:runId,actor:{id:scope.actorId,authenticated:true}};
   const entries=configs.map(({id,config})=>({...scope,provider:id,secretRef:`workflow/${runId}/${id}`,value:config.apiKey}));
   const providers=configs.map(({id,config},index)=>{const {apiKey,...safe}=config;return {id,config:{...safe,maxOutputTokens:Math.min(safe.maxOutputTokens,WORKFLOW_LIMITS.maxOutputTokens),timeoutMs:Math.min(safe.timeoutMs,60000)},credentials:{id:`workflow-${id}`,provider:id,projectId:scope.projectId,organizationId:scope.organizationId,secretRef:entries[index]!.secretRef}} as RoutedProviderConfig;});
   const options:RoutedServiceOptions={context,costs,policy,authorization:new OwnerGenerationPolicy(scope.actorId,scope),secrets:new LocalSecretProvider(entries,'development'),providers};
-  return createWebsiteWorkflowService(options,{business:await createRoutedBusinessService(options)});
+  return options;
  };
+}
+
+export function configuredWorkflowFactory(env:Record<string,string|undefined>):RunnerFactory|undefined {
+ const factory=configuredWorkflowOptionsFactory(env);if(!factory)return;
+ return async(scope,runId,costs)=>{const options=await factory(scope,runId,costs);return createWebsiteWorkflowService(options,{business:await createRoutedBusinessService(options)});};
 }

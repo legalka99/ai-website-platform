@@ -1,3 +1,4 @@
+import {PUBLIC_SECTION_FIELDS} from '../contracts/content-publication.js';
 import { Ajv } from 'ajv';
 import { validateExternal } from '../../../security/src/validation.js';
 import { plainJSON } from '../agents/design-schema.js';
@@ -13,7 +14,7 @@ const id={type:'string',minLength:1,maxLength:200,pattern:'^[A-Za-z0-9][A-Za-z0-
 const integer=(maximum:number)=>({type:'integer',minimum:0,maximum});
 const timestamp={type:'string',maxLength:24,pattern:'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$'};
 const object=(properties:Record<string,unknown>,required=Object.keys(properties))=>({type:'object',additionalProperties:false,properties,required});
-const block=object({id,type:{type:'string',enum:['hero','text','services','advantages','faq','cta']},order:integer(9),visible:{type:'boolean'},
+const block=object({id,type:{type:'string',enum:['hero','text','services','advantages','faq','cta']},order:integer(Number.MAX_SAFE_INTEGER),visible:{type:'boolean'},
   content:object({heading:text(200),text:text(2000),points:{type:'array',minItems:1,maxItems:8,items:text(400)},callToAction:text(160)},[]),
   settings:object({alignment:{type:'string',enum:['left','center']}},['alignment'])},['id','type','order','visible','content']);
 const page=object({id,slug:{type:'string',minLength:1,maxLength:100,pattern:'^/(?:[a-z0-9]+(?:-[a-z0-9]+)*)?(?![\\s\\S])'},title:text(200),status:{const:'draft'},order:integer(9),
@@ -78,6 +79,6 @@ export function validateDeveloperReuse(output:DeveloperOutput,input:DeveloperAge
   return p.blocks.every((b,i)=>{
     const source=c.sections[i]!;
     if(b.type!==developerBlockType(source.type))return false;
-    return Object.entries(b.content).every(([key,value])=>JSON.stringify(value)===JSON.stringify(source[key as keyof typeof source]));
+    return Object.entries(b.content).every(([key,value])=>(PUBLIC_SECTION_FIELDS as readonly string[]).includes(key)&&JSON.stringify(value)===JSON.stringify(source[key as keyof typeof source]));
   });
 }

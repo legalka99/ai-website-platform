@@ -30,11 +30,11 @@ for(const [text,kind] of claims) {
 for(const text of ['Расскажите о вашей задаче и запросите расчёт.','Можно начать с описания помещения и доступных размеров.','Выбор конструкции зависит от задачи и параметров помещения.','Решение для ванной комнаты.','Заказать конструкцию по индивидуальным параметрам.'])test(`neutral or safe derivation: ${text}`,()=>assert.equal(inspect(text),undefined));
 for(const text of ['Профессиональный tone of voice','Professional','Профессиональный, экспертный и спокойный'])test(`style is not a business claim: ${text}`,()=>assert.equal(inspect(text,input(),'toneOfVoice'),undefined));
 for(const text of ['Для публикации информации о качестве нужны подтверждённые данные.','Для добавления информации о гарантии требуются подтверждённые условия гарантии.','Для публикации сроков изготовления требуется подтверждённый срок.','Необходимо подтвердить условия доставки.','Для финальной страницы потребуются подтверждённые данные о способах связи, сроках, материалах, вариантах отделки, замере и монтаже, если эти услуги предоставляются.','Объяснить практическую ценность обращения без неподтверждённых обещаний.'])test(`missing facts request: ${text}`,()=>assert.equal(inspect(text,input(),'notes'),undefined));
-test('notes exemption cannot hide an assertion, including same-sentence conjunctions',()=>{
- for(const text of ['Необходимо подтвердить условия доставки. Гарантируем качество.','Необходимо подтвердить условия доставки, и мы гарантируем качество.','Для публикации информации о качестве нужны подтверждённые данные, наше высокое качество.'])assert.ok(inspect(text,input(),'notes'));
+test('internal notes are not published; the same unsupported public assertions still fail',()=>{
+ for(const text of ['Необходимо подтвердить условия доставки. Гарантируем качество.','Необходимо подтвердить условия доставки, и мы гарантируем качество.','Для публикации информации о качестве нужны подтверждённые данные, наше высокое качество.']){assert.equal(inspect(text,input(),'notes'),undefined);assert.ok(inspect(text));}
 });
-test('style field cannot hide company promises',()=>{
- for(const text of ['Компания профессиональная','Наша экспертная команда','Изготовим за 5 дней'])assert.ok(inspect(text,input(),'toneOfVoice'));
+test('internal style vocabulary is allowed but does not authorize public promises',()=>{
+ for(const text of ['Компания профессиональная','Наша экспертная команда','Изготовим за 5 дней']){assert.equal(inspect(text,input(),'toneOfVoice'),undefined);assert.ok(inspect(text));}
 });
 test('design, goals, competitors and missing-information notes are not evidence',()=>{
  const i=input();i.design.mood=['Premium','Expert','Fast'];i.design.description='Высокое качество';i.business.websiteGoals=['Высокое качество'];i.business.competitors=['Высокое качество'];i.business.notes='Высокое качество';
@@ -43,8 +43,8 @@ test('design, goals, competitors and missing-information notes are not evidence'
 test('no evidence pooling, changed numbers, stripped conditions, negated facts or substrings',()=>{
  for(const [fact,text] of [['Гарантия 2 года','Гарантия 5 лет'],['Высокое качество при соблюдении условий','Высокое качество'],['Не гарантируем качество','Гарантируем качество'],['Нет гарантии','Гарантия'],['Невысокое качество','Высокое качество']]) {const i=input();i.business.advantages=[fact];i.confirmedBusinessFacts=confirmed({advantages:fact});assert.ok(inspect(text,i));}
 });
-test('claim validation covers every copy and metadata path before state storage',()=>{
- const edits=[['pageTitle',p=>p.pageTitle='Высокое качество'],['pageGoal',p=>p.pageGoal='Высокое качество'],['keyMessages[0]',p=>p.keyMessages[0]='Высокое качество'],['sections[0].purpose',p=>p.sections[0].purpose='Высокое качество'],['sections[0].heading',p=>p.sections[0].heading='Высокое качество'],['sections[0].points[0]',p=>p.sections[0].points=['Высокое качество']]];
+test('claim validation covers every public copy path before state storage',()=>{
+ const edits=[['pageTitle',p=>p.pageTitle='Высокое качество'],['sections[0].heading',p=>p.sections[0].heading='Высокое качество'],['sections[0].points[0]',p=>p.sections[0].points=['Высокое качество']]];
  for(const [path,edit] of edits){const p=plan();edit(p);assert.equal(validateContentGrounding(p,input()).path,path);}
 });
 test('explicit business facts have bounded strict safe input validation',()=>{

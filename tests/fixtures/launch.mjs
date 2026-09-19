@@ -8,7 +8,7 @@ import {createWebsiteWorkflowService} from '../../.test-build/packages/ai/src/se
 import {validOutputs} from './website.mjs';
 import {businessWire} from './business-wire.mjs';
 import {qaWire} from './qa.mjs';
-export function launchBrief(){return {companyName:'Example',description:'Custom glass partitions',productsOrServices:'Partitions',targetAudience:'Homeowners',geography:null,websiteGoals:'Receive enquiries',advantages:null,desiredActions:'Request a quote',contacts:null,notes:null};}
+export function launchBrief(){return {companyName:'Example',description:'Custom glass partitions',productsOrServices:'Partitions',targetAudience:'Homeowners',geography:null,websiteGoals:'Receive enquiries',advantages:[],desiredActions:'Request a quote',contacts:null,notes:null};}
 export function fakeLaunchFactory({fail,qaPass=true,hold,primary='openai',transient=false,invalidDesign=false,invalidContent=false,contentText,inspectRequest}={}){
  const calls=[];
  const factory=async(scope,runId,costs)=>{

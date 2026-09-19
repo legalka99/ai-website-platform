@@ -18,6 +18,7 @@ export interface WebsiteWorkflowAgents {
 export interface WebsiteWorkflowTask {
   projectId: string;
   goal: string;
+  creativeContext?: import('../../../core/src/generation-intent.js').CreativeContext;
   signal?: AbortSignal;
   /** Trusted server persistence observer; never sourced from user input. */
   onStage?: (stage: import('../agent.js').AgentType, phase: 'started' | 'completed', execution?: import('../agent.js').AgentResult['execution']) => Promise<void>;

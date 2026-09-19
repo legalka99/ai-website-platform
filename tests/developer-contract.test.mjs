@@ -17,7 +17,7 @@ test('strict proposal -> canonical draft Website; server IDs, dates, palette, de
  assert.match(w.id,/^[a-f0-9-]{36}$/);assert.ok(page.id.startsWith(w.id));assert.ok(page.blocks[0].id.startsWith(page.id));assert.equal(w.createdAt,result.generatedAt);assert.equal(w.updatedAt,result.generatedAt);assert.notEqual(output().website.id,w.id);
 });
 for(const type of ['hero','services','advantages','faq','cta','process','custom','gallery','contacts','testimonials','text'])test(`section mapping: ${type}`,()=>{
- const i=developerInput();i.content.sections[0].type=type;const result=buildDeveloperWebsite(validateDeveloperInput(i),layout(),'project-1');
+ const i=developerInput();i.content.sections[0].type=type;if(type==='advantages')i.content.sections[0].points=['Explore options','Compare details','Choose a direction'];const result=buildDeveloperWebsite(validateDeveloperInput(i),layout(),'project-1');
  const expected=['process','custom','gallery','contacts','testimonials'].includes(type)?'text':type;
  assert.equal(developerBlockType(type),expected);assert.equal(result.website.pages[0].blocks[0].type,expected);assert.equal(validateDeveloperOutput(result,'project-1').valid,true);
 });
@@ -25,6 +25,10 @@ test('all approved section fields survive byte-for-byte and order is preserved',
  const i=developerInput();i.content.sections=[{type:'hero',purpose:'Introduce services',heading:'Glass partitions',text:'Describe your project.',points:['Partitions','Shower enclosures'],callToAction:'Request a quote'},{type:'process',purpose:'Explain steps',text:'Describe the room.'}];
  const w=buildDeveloperWebsite(validateDeveloperInput(i),layout(2),'project-1').website;
  assert.deepEqual(w.pages[0].blocks.map(b=>b.order),[0,1]);assert.deepEqual(w.pages[0].blocks[0].content,{heading:i.content.sections[0].heading,text:i.content.sections[0].text,points:i.content.sections[0].points,callToAction:i.content.sections[0].callToAction});assert.equal(w.pages[0].seo.description,i.content.sections[0].text);
+});
+test('Website block order is a safe integer independent of the ten-block page count',()=>{
+ const o=output();o.website.pages[0].blocks[0].order=10;assert.equal(validateDeveloperOutput(o,'project-1').valid,true);
+ o.website.pages[0].blocks[0].order=Number.MAX_SAFE_INTEGER+1;assert.equal(validateDeveloperOutput(o,'project-1').valid,false);
 });
 for(const [name,mutate] of [
  ['bad color',i=>i.design.colors.primary='red'],['css',i=>i.design.typography.headingStyle='url(https://evil.example)'],['style',i=>i.design.notes='<style>body</style>'],['font URL',i=>i.design.typography.bodyStyle='https://font.example'],['credential',i=>i.content.sections[0].text='password: TEST_ONLY'],['oversized',i=>i.design.description='a'.repeat(2001)],['ungrounded',i=>i.content.sections[0].text='High quality'],['new CTA',i=>i.content.sections[0].callToAction='Buy now'],['extra',i=>i.projectId='other'],['missing',i=>delete i.content]

@@ -1,3 +1,4 @@
+import {publicSectionCopy} from '../contracts/content-publication.js';
 import { randomUUID } from 'node:crypto';
 import type { DeveloperAgentInput } from '../contracts/developer-agent-input.js';
 import type { DeveloperOutput } from '../contracts/developer-output.js';
@@ -23,7 +24,6 @@ export function buildDeveloperWebsite(input:DeveloperAgentInput,proposal:Develop
       blocks:proposal.sections.map((layout,i)=>{
         const section=input.content.sections[i]!;
         return {id:`${pageId}-block-${i}`,type:developerBlockType(section.type),order:i,visible:true,
-          settings:{alignment:layout.alignment},content:{...(section.heading?{heading:section.heading}:{}),...(section.text?{text:section.text}:{}),
-            ...(section.points?{points:[...section.points]}:{}),...(section.callToAction?{callToAction:section.callToAction}:{})}};
+          settings:{alignment:layout.alignment},content:publicSectionCopy(section)};
       })}]}};
 }

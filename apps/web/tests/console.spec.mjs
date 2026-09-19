@@ -71,6 +71,7 @@ async function mock(page, options = {}) {
         body: JSON.stringify(body),
       });
     if (request.method() === "OPTIONS") return send({});
+    if (url.pathname.endsWith("/block-workflows")) return send({available:false,pages:[],run:null});
     if (url.pathname.endsWith("/auth/me"))
       return send(
         authenticated
@@ -104,7 +105,12 @@ async function mock(page, options = {}) {
       await new Promise((resolve) => setTimeout(resolve, options.delay));
     if (url.pathname === "/health") return send({ status: "ok" });
     if (url.pathname.endsWith('/workflow-state')) return send({available:false,run:null,limits:{maxOutputTokens:4000,maxWorkflowOutputTokens:40000,maxRequestsPerWorkflow:10,timeoutMs:600000}});
-    if (url.pathname.endsWith('/brief')) return send({snapshot:null});
+    if (url.pathname.endsWith('/brief')) {
+      if(request.method()==='POST'){
+        const body=request.postDataJSON();options.briefBodies?.push(body);return send({id:org,projectId:id,organizationId:org,version:(options.briefSnapshot?.version??0)+1});
+      }
+      return send({snapshot:options.briefSnapshot??null});
+    }
     if (url.pathname.endsWith("/dashboard")) return send(dashboard);
     if (url.pathname.endsWith("/" + id))
       return send({
@@ -665,6 +671,25 @@ test('create form blocks duplicate submit and reuses operation ID after uncertai
  await expect(page.locator('body')).not.toContainText('PRIVATE_SQL_ERROR');await expect(page.getByLabel('Название организации')).toHaveValue('Клиент');
 });
 
+const briefDocument=advantages=>({companyName:'Студия',description:'Описание',productsOrServices:'Изделия',targetAudience:'Клиенты',geography:null,websiteGoals:'Заявки',advantages,desiredActions:'Оставить заявку',contacts:null,notes:null});
+test('legacy Brief advantage stays one textarea value and newline save sends ordered structured items',async({page})=>{
+ const bodies=[],legacy='лучшие цены, собственное производство, монтаж под ключ';
+ await mock(page,{briefBodies:bodies,briefSnapshot:{id:org,projectId:id,organizationId:org,version:1,createdAt:stamp,brief:briefDocument(legacy)}});await page.goto(`/admin/projects/${id}/brief`);
+ const field=page.getByLabel('Ключевые преимущества');await expect(field).toHaveValue(legacy);await field.fill(' Первое \r\n\nВторое\nТретье "под ключ" ');
+ await page.getByRole('button',{name:'Сохранить бриф'}).click();await expect.poll(()=>bodies.length).toBe(1);
+ expect(bodies[0].expectedVersion).toBe(1);expect(bodies[0].brief.advantages).toEqual([{text:'Первое'},{text:'Второе'},{text:'Третье "под ключ"'}]);
+});
+test('structured Brief preserves advantage order and optional empty list',async({page})=>{
+ const bodies=[],items=[{text:'Первое'},{text:'Второе'},{text:'Третье'}];await mock(page,{briefBodies:bodies,briefSnapshot:{id:org,projectId:id,organizationId:org,version:2,createdAt:stamp,brief:briefDocument(items)}});await page.goto(`/admin/projects/${id}/brief`);
+ const field=page.getByLabel('Ключевые преимущества');await expect(field).toHaveValue('Первое\nВторое\nТретье');await field.fill('');
+ await page.getByRole('button',{name:'Сохранить бриф'}).click();await expect.poll(()=>bodies.length).toBe(1);expect(bodies[0].brief.advantages).toEqual([]);
+});
+test('Brief fields provide natural-language helper text without internal storage vocabulary',async({page})=>{
+ await mock(page,{briefSnapshot:{id:org,projectId:id,organizationId:org,version:2,createdAt:stamp,brief:briefDocument([])}});await page.goto(`/admin/projects/${id}/brief`);
+ for(const text of ['Укажите название компании, бренда или проекта.','Опишите бизнес простыми словами','каждый пункт с новой строки','Кто ваши основные клиенты?','Укажите города, регионы или страны','Что должен сделать посетитель сайта','Например: Получить расчёт'])await expect(page.getByText(text,{exact:false}).first()).toBeVisible();
+ const body=(await page.locator('body').innerText()).toLowerCase();for(const word of ['schema','array','fact atomization','grounding'])expect(body).not.toContain(word);
+});
+
 const launchLimits={maxOutputTokens:4000,maxWorkflowOutputTokens:40000,maxRequestsPerWorkflow:10,timeoutMs:600000};
 const launchRun=(state='running')=>({id,projectId:id,briefVersionId:org,briefVersion:1,status:state,startedAt:new Date().toISOString(),completedAt:state==='running'?null:new Date().toISOString(),deadlineAt:new Date(Date.now()+600000).toISOString(),failureCode:state==='failed'?'BUDGET_EXCEEDED':null,stages:['business','design','content','developer','qa'].map((stage,i)=>({stage,status:state==='running'?(i===0?'running':'waiting'):'completed'})),websiteId:id,versionId:state==='completed'||state==='qa_failed'?id:null,qaId:state==='completed'||state==='qa_failed'?id:null});
 async function launchMock(page,{role='platform_owner',initial=null,fail=false}={}){
@@ -691,3 +716,44 @@ for(const state of ['qa_failed','failed'])test(`workflow ${state} has honest saf
 });
 test('workflow platform admin cannot launch',async({page})=>{const x=await launchMock(page,{role:'platform_admin'});await page.goto(`/admin/projects/${id}`);await expect(page.getByRole('region',{name:'Создание сайта'})).toBeVisible();await expect(page.getByRole('button',{name:'Запустить создание сайта',exact:true})).toHaveCount(0);expect(x.posts()).toBe(0);});
 test('workflow raw launch failure never reaches UI',async({page})=>{await launchMock(page,{fail:true});await page.goto(`/admin/projects/${id}`);await page.getByRole('button',{name:'Запустить создание сайта',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Запустить',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Не удалось запустить процесс.');await expect(page.locator('body')).not.toContainText('RAW_PROVIDER_SECRET');});
+
+
+const blockRun=(status='running')=>({id,pageId:id,blockId:org,status,stage:status==='running'?'content':'qa',errorCode:status==='failed'?'INVALID_RESPONSE':null,deadlineAt:new Date(Date.now()+120000).toISOString(),versionId:status==='completed'?id:null});
+async function blockMock(page,{role='platform_owner',initial=null,empty=false,fail=false,clarification=false}={}){
+ await mock(page,{role});let run=initial,pages=empty?[]:[{id,title:'Главная'}],posts=0,release;const pending=new Promise(r=>release=r),bodies=[];
+ const send=(route,body,status=200)=>route.fulfill({status,contentType:'application/json',headers:{'access-control-allow-origin':'http://localhost:3000','access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET, POST'},body:JSON.stringify(body)});
+ await page.route('**/api/v1/admin/projects/*/block-pages',route=>{if(route.request().method()==='OPTIONS')return send(route,{});pages=[{id,title:'Главная'}];return send(route,{created:true});});
+ await page.route('**/api/v1/admin/projects/*/block-workflows',async route=>{
+  if(route.request().method()==='OPTIONS')return send(route,{});
+  if(route.request().method()==='GET')return send(route,{available:true,pages,run});
+  posts++;bodies.push(route.request().postDataJSON());if(fail)return send(route,{error:{message:'RAW_BLOCK_PROVIDER_SECRET'}},503);if(clarification)return send(route,{runId:id,status:'needs_clarification',clarification:{code:'TARGET_UNCLEAR',question:'Уточните: нужен первый экран или верхняя навигация?',unresolved:[{kind:'target'}]}});
+  run=blockRun();await pending;run=blockRun('completed');return send(route,{runId:id},201);
+ });return {posts:()=>posts,bodies,release,terminal:status=>run=blockRun(status)};
+}
+test('Block clarification is shown as a normal application result without raw input',async({page})=>{
+ await blockMock(page,{clarification:true});await page.goto(`/admin/projects/${id}`);await page.getByLabel('Что нужно сделать?').fill('сделай шапку сайта');await page.getByRole('button',{name:'Создать блок'}).click();
+ await expect(page.getByRole('region',{name:'Создание',exact:true}).getByRole('status')).toContainText('Уточните: нужен первый экран или верхняя навигация?');await expect(page.getByRole('alert')).toHaveCount(0);await expect(page.locator('body')).not.toContainText('RAW_BLOCK_PROVIDER_SECRET');
+});
+test('block creation starts without Brief; disabled future modes and only scoped selectors sent once',async({page})=>{
+ const x=await blockMock(page,{empty:true});await page.goto(`/admin/projects/${id}`);const region=page.getByRole('region',{name:'Создание',exact:true});
+ await expect(region.getByRole('button',{name:'Целая страница — Скоро'})).toBeDisabled();await expect(region.getByRole('button',{name:'Сайт полностью — Скоро'})).toBeDisabled();
+ await region.getByRole('button',{name:'Подготовить страницу'}).click();await expect(region.getByRole('combobox').first()).toHaveValue(id);
+ await region.getByLabel('Что нужно сделать?').fill('Сделай блок преимуществ');await region.getByLabel('Тип блока (необязательно)').selectOption('advantages');
+ await region.getByRole('button',{name:'Создать блок',exact:true}).dblclick();await expect(region.getByRole('button',{name:'Запуск…',exact:true})).toBeDisabled();expect(x.posts()).toBe(1);
+ expect(Object.keys(x.bodies[0]).sort()).toEqual(['blockType','idempotencyKey','instruction','pageId']);expect(x.bodies[0].blockType).toBe('advantages');
+ x.release();await expect(region).toContainText('Блок создан');await expect(region).toContainText('Сохранена версия черновика');await page.screenshot({path:'/tmp/kleo-console-block.png',fullPage:true});
+});
+test('block refresh recovers persisted current stage and prevents double launch',async({page})=>{
+ const x=await blockMock(page,{initial:blockRun()});await page.goto(`/admin/projects/${id}`);const region=page.getByRole('region',{name:'Создание',exact:true});await region.getByLabel('Что нужно сделать?').fill('Новый блок');await expect(region.getByRole('button',{name:'Создать блок',exact:true})).toBeDisabled();await page.reload();await expect(region).toContainText('Тексты');expect(x.posts()).toBe(0);x.terminal('failed');await expect(region).toContainText('INVALID_RESPONSE',{timeout:7000});
+});
+test('block admin reads status but has no launch controls',async({page})=>{
+ const x=await blockMock(page,{role:'platform_admin',initial:blockRun('completed')});await page.goto(`/admin/projects/${id}`);const region=page.getByRole('region',{name:'Создание',exact:true});await expect(region).toContainText('Блок создан');await expect(region.getByRole('button',{name:'Создать блок',exact:true})).toHaveCount(0);expect(x.posts()).toBe(0);
+});
+test('block network failure hides raw text and retains idempotency for an explicit repeat',async({page})=>{
+ const x=await blockMock(page,{fail:true});await page.goto(`/admin/projects/${id}`);const region=page.getByRole('region',{name:'Создание',exact:true});await region.getByLabel('Что нужно сделать?').fill('Сделай блок');
+ await region.getByRole('button',{name:'Создать блок',exact:true}).click();await expect(region.getByRole('alert')).toContainText('Проверьте сохранённый статус');await expect(page.locator('body')).not.toContainText('RAW_BLOCK_PROVIDER_SECRET');
+ await region.getByRole('button',{name:'Обновить статус блока'}).click();await region.getByRole('button',{name:'Создать блок',exact:true}).click();await expect(region.getByRole('alert')).toBeVisible();expect(x.posts()).toBe(2);expect(x.bodies[0].idempotencyKey).toBe(x.bodies[1].idempotencyKey);expect(x.bodies[0].blockType).toBeUndefined();
+});
+test('expired block run is displayed as interrupted, never silently resumed',async({page})=>{
+ const run={...blockRun(),deadlineAt:'2020-01-01T00:00:00.000Z'},x=await blockMock(page,{initial:run});await page.goto(`/admin/projects/${id}`);const region=page.getByRole('region',{name:'Создание',exact:true});await expect(region).toContainText('Процесс прерван или превысил время');await expect(region.getByRole('button',{name:'Создать блок',exact:true})).toBeDisabled();expect(x.posts()).toBe(0);
+});

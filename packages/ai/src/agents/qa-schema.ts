@@ -25,7 +25,14 @@ export const qaWireSchema=JSON.parse(JSON.stringify({type:'object',additionalPro
     pageIndex:nullable({type:'integer',minimum:0,maximum:9}),blockIndex:nullable({type:'integer',minimum:0,maximum:9}),recommendation:nullable(qaIssueProperties.recommendation),
   }}}
 }}));
+/** Server configuration only, never a field accepted from provider/HTTP input. */
+export type QAReviewScope='website'|'block';
+export const QA_BLOCK_AI_CODES=Object.freeze(QA_AI_CODES.filter(code=>code!=='SEO_INVALID'));
+const blockWireSchema=structuredClone(qaWireSchema);
+blockWireSchema.properties.issues.items.properties.code.enum=[...QA_BLOCK_AI_CODES];
+export function qaSchemaForScope(scope:QAReviewScope){return structuredClone(scope==='block'?blockWireSchema:qaWireSchema);}
 const wireValidator=new Ajv({strict:true}).compile(qaWireSchema);
+const blockWireValidator=new Ajv({strict:true}).compile(blockWireSchema);
 export function snapshotQAInput(value:unknown):QAAgentInput & Required<Pick<QAAgentInput,'reviewContext'>> {
   validateExternal(value,plainJSON,{maxBytes:110000,maxString:8000,maxArray:50,maxDepth:9,maxNodes:2000});
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['website','generatedAt','notes','reviewContext'].includes(k)))throw new SecurityError('INVALID_INPUT');
@@ -41,7 +48,7 @@ const equal=(a:unknown,b:unknown):boolean=>{
   const x=Object.keys(a),y=Object.keys(b);return x.length===y.length&&x.every(k=>Object.hasOwn(b,k)&&equal((a as Record<string,unknown>)[k],(b as Record<string,unknown>)[k]));
 };
 /** Never attach rejected input values or potentially forged IDs to deterministic findings. */
-export function deterministicQA(input:ReturnType<typeof snapshotQAInput>,projectId:string):QAIssue[] {
+export function deterministicQA(input:ReturnType<typeof snapshotQAInput>,projectId:string,scope:QAReviewScope='website'):QAIssue[] {
   const issues:QAIssue[]=[];
   const add=(code:keyof typeof QA_CODE_MINIMUM,message:string)=>issues.push({code,severity:QA_CODE_MINIMUM[code],message});
   const {reviewContext:r,...developer}=input;
@@ -64,13 +71,13 @@ export function deterministicQA(input:ReturnType<typeof snapshotQAInput>,project
   if(page.blocks.length!==r.content.sections.length||page.blocks.some((b,i)=>b.order!==i||!b.visible||['heading','text','points','callToAction'].some(key=>!equal(b.content[key],r.content.sections[i]?.[key as keyof typeof r.content.sections[number]]))))add('MISSING_REQUIRED_SECTION','Required content is missing or reordered.');
   if(page.order!==0)add('CONTENT_MISMATCH','Page order differs from the approved structure.');
   if(!equal(input.website.designSystem,developerDesignSystem(r)))add('DESIGN_MISMATCH','Design tokens differ from the approved direction and defaults.');
-  if(!page.seo?.title)add('SEO_INVALID','A page SEO title is required.');
+  if(scope==='website'&&!page.seo?.title)add('SEO_INVALID','A page SEO title is required.');
   return issues.filter((issue,index,all)=>all.findIndex(i=>i.code===issue.code)===index);
 }
-export function parseQAWire(value:unknown,input:ReturnType<typeof snapshotQAInput>):{report?:QAReport;validationError?:QAValidationError} {
+export function parseQAWire(value:unknown,input:ReturnType<typeof snapshotQAInput>,scope:QAReviewScope='website'):{report?:QAReport;validationError?:QAValidationError} {
   const error=(path:string,rule:string,stage:QAValidationError['stage']='qa-schema')=>({validationError:{stage,path,rule}});
   try{validateExternal(value,plainJSON,QA_REPORT_LIMITS);}catch{return error('$','RESOURCE_LIMIT_OR_NON_JSON');}
-  if(!wireValidator(value))return error('$','SCHEMA_INVALID');
+  if(!(scope==='block'?blockWireValidator:wireValidator)(value))return error('$','SCHEMA_INVALID');
   const wire=value as {passed:boolean;score:number;notes:string|null;issues:{code:string;severity:QAIssue['severity'];message:string;pageIndex:number|null;blockIndex:number|null;recommendation:string|null}[]};
   const issues:QAIssue[]=[];
   for(const [i,issue] of wire.issues.entries()) {

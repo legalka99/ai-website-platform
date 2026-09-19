@@ -10,7 +10,7 @@ import {WebsiteWorkflowOrchestrator} from '../.test-build/packages/ai/src/orches
 import {validateResult} from '../.test-build/packages/persistence/src/validation.js';
 import {loadMigrations} from '../scripts/persistence-db.mjs';
 const input=facts=>({business:validOutputs().business,design:validOutputs().design,...(facts?{confirmedBusinessFacts:facts}:{})});
-const plan=text=>{const p=validOutputs().content;p.keyMessages=[text];return p;};
+const plan=text=>{const p=validOutputs().content;p.sections[0].text=text;return p;};
 
 test('Brief fields retain provenance; only explicit factual categories become commercial evidence',()=>{
  const facts=confirmed({companyName:'Example',description:'Glass products',productsOrServices:'Выполняем монтаж',targetAudience:'Homeowners',geography:'Москва',advantages:'Консультация без предоплаты',websiteGoals:'Доставляем изделия',desiredActions:'Проводим замер',notes:'Проектируем конструкции'});
@@ -20,9 +20,9 @@ test('Brief fields retain provenance; only explicit factual categories become co
  assert.ok(clauses.includes('Выполняем монтаж'));assert.ok(clauses.includes('Консультация без предоплаты'));
  for(const value of ['Доставляем изделия','Проводим замер','Проектируем конструкции'])assert.ok(!clauses.includes(value));
 });
-for(const claim of ['Выполняем монтаж','Монтаж','Монтируем перегородки','Доставка','Доставляем изделия','Замер','Замеряем помещение','Консультация','Консультируем покупателей','Проектирование','Проектируем конструкции','Установка','Устанавливаем конструкции','Сопровождение','Сопровождаем заказ'])test(`service requires exact Brief evidence: ${claim}`,()=>{
+for(const claim of ['Выполняем монтаж','Монтаж','Монтируем перегородки','Доставка','Доставляем изделия','Замер','Замеряем помещение','Консультация','Консультируем покупателей','Проектирование','Проектируем конструкции','Установка','Устанавливаем конструкции','Сопровождение','Сопровождаем заказ'])test(`service requires confirmed Brief evidence: ${claim}`,()=>{
  const p=plan(claim),facts=confirmed({productsOrServices:'Стеклянные изделия'});
- assert.deepEqual(validateContentGrounding(p,input(facts)),{stage:'content-grounding',path:'keyMessages[0]',rule:'UNGROUNDED_SERVICE_CLAIM'});
+ assert.deepEqual(validateContentGrounding(p,input(facts)),{stage:'content-grounding',path:'sections[0].text',rule:'UNGROUNDED_SERVICE_CLAIM'});
  assert.equal(validateContentGrounding(p,input(confirmed({productsOrServices:claim}))),undefined);
 });
 for(const claim of ['Консультация без предоплаты','Не выполняем монтаж','Доставляем изделия только при оформлении заказа','Монтаж если помещение подготовлено','Доставляем изделия, но только при оформлении заказа'])test('conditions and negations survive evidence extraction without granting unconditional promises',()=>{

@@ -10,7 +10,9 @@ import {stages} from './validation.js';
 /** Maps user data only; no generated outputs, industry inference or client-controlled goal. */
 export function briefWorkflowInput(value:unknown):Record<string,unknown>{
  const b=parseBrief(value);const out:Record<string,unknown>={companyName:b.companyName,description:b.description};
- for(const k of ['productsOrServices','targetAudience','geography','websiteGoals','advantages','desiredActions'] as const)if(b[k])out[k]=[b[k]];
+ for(const k of ['productsOrServices','targetAudience','geography','websiteGoals','desiredActions'] as const)if(b[k])out[k]=[b[k]];
+ if(Array.isArray(b.advantages)){if(b.advantages.length)out.advantages=b.advantages.map(item=>item.text);}
+ else if(b.advantages)out.advantages=[b.advantages];
  const notes=[b.notes,b.contacts?`Public business contacts: ${b.contacts}`:null].filter(Boolean).join('\n');if(notes)out.notes=notes;
  if(JSON.stringify({goal:WORKFLOW_GOAL,business:out}).length>12000)throw new AuthError('INVALID_INPUT');return out;
 }
@@ -24,6 +26,7 @@ export async function prepareOwnerWorkflow(db:PoolClient,actor:AuthActor,project
  if(!brief)throw new AuthError('NOT_FOUND');const input=briefWorkflowInput(brief.document);
  let created=false;
  const receipt=await once(db,actor,value.idempotencyKey,['workflow',projectId,value.briefVersionId],async()=>{
+  if((await db.query("SELECT id FROM kleo.block_runs WHERE project_id=$1 AND status='running'",[projectId])).rows.length)throw new AuthError('CONFLICT');
   if(!available)throw new AuthError('UNAVAILABLE');
   if((await db.query("SELECT id FROM kleo.workflow_runs WHERE project_id=$1 AND status='running'",[projectId])).rows.length)throw new AuthError('CONFLICT');
   const id=randomUUID();
